@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "stock-market-service": {
+      "command": "python",
+      "args": ["start_stock_market_service.py"],
+      "env": {}
+    }
+  }
+}
