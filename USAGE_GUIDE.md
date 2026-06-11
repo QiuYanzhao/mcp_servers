@@ -34,8 +34,9 @@ python -m src.mcp_servers.stock_market.main
 {
   "mcpServers": {
     "stock-market-service": {
-      "command": "python",
-      "args": ["start_stock_market_service.py"],
+      "command": "uv",
+      "args": ["run", "python", "start_stock_market_service.py"],
+      "cwd": "/Users/qyz/TraeProjects/mcp_servers",
       "env": {}
     }
   }

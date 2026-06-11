@@ -34,6 +34,14 @@ class StockDataFetcher:
         """初始化数据获取器"""
         self._client: Optional[Quotes] = None
 
+    # 通达信行情服务器列表（备用）
+    _TDX_SERVERS = [
+        ("110.41.147.114", 7709),
+        ("47.113.94.204", 7709),
+        ("124.70.176.52", 7709),
+        ("121.36.54.217", 7709),
+    ]
+
     def _get_client(self) -> Quotes:
         """
         获取或创建行情客户端
@@ -42,8 +50,23 @@ class StockDataFetcher:
             Quotes实例
         """
         if self._client is None:
-            logger.info("创建mootdx行情客户端")
-            self._client = Quotes.factory(market="std", bestip=True, heartbeat=True)
+            last_error = None
+            for host, port in self._TDX_SERVERS:
+                try:
+                    logger.info(f"尝试连接通达信服务器: {host}:{port}")
+                    self._client = Quotes.factory(
+                        market="std",
+                        server=(host, port),
+                        heartbeat=True,
+                    )
+                    logger.info(f"成功连接通达信服务器: {host}:{port}")
+                    return self._client
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"连接 {host}:{port} 失败: {e}")
+            raise ConnectionError(
+                f"无法连接任何通达信服务器，最后错误: {last_error}"
+            )
         return self._client
 
     def close(self):
@@ -276,14 +299,23 @@ class StockDataFetcher:
                 return {"error": "未获取到数据"}
 
             row = df.iloc[0]
+            # mootdx quotes() 字段说明：
+            # - price: 当前价（即收盘价/最新价）
+            # - last_close: 昨日收盘价
+            # - vol/volume: 成交量（两个字段值相同）
+            # - 注意：mootdx 不返回股票名称，code 是股票代码
+            last_close = float(row.get("last_close", 0))
+            price = float(row.get("price", 0))
             return {
                 "symbol": symbol,
                 "name": str(row.get("code", "")),
                 "open": float(row.get("open", 0)),
                 "high": float(row.get("high", 0)),
                 "low": float(row.get("low", 0)),
-                "close": float(row.get("close", 0)),
-                "volume": int(row.get("volume", 0)),
+                "close": price,
+                "last_close": last_close,
+                "change_pct": round((price - last_close) / last_close * 100, 2) if last_close > 0 else 0,
+                "volume": int(row.get("vol", 0)),
                 "amount": float(row.get("amount", 0)),
             }
 

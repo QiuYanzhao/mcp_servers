@@ -3,7 +3,7 @@ name = "mcp-servers"
 version = "0.1.0"
 description = "MCP服务器集合，包含多个MCP服务实现"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "A58", email = "a58@example.com"}
