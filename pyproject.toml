@@ -9,7 +9,8 @@ authors = [
     {name = "A58", email = "a58@example.com"}
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0"
+    "mcp[cli]>=1.0.0",
+    "requests>=2.25.0"
 ]
 
 [project.optional-dependencies]

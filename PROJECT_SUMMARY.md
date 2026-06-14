@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-这是一个MCP服务器集合项目，使用Python和uv包管理器开发。目前包含A股行情数据MCP服务。
+这是一个MCP服务器集合项目，使用Python和uv包管理器开发。目前包含A股行情数据MCP服务和开盘红平台行情数据MCP服务。
 
 ## 项目结构
 
@@ -12,18 +12,29 @@ mcpServers/
 │   └── mcp_servers/
 │       ├── __init__.py
 │       ├── base.py
-│       └── stock_market/
+│       ├── stock_market/
+│       │   ├── __init__.py
+│       │   ├── service.py
+│       │   └── main.py
+│       └── kph_market_data/
 │           ├── __init__.py
+│           ├── config.py
+│           ├── logger.py
+│           ├── client.py
+│           ├── models.py
 │           ├── service.py
 │           └── main.py
 ├── tests/
-│   └── test_stock_market.py
+│   ├── test_stock_market.py
+│   └── test_kph_market_data.py
 ├── examples/
-│   └── stock_market_example.py
+│   ├── stock_market_example.py
+│   └── kph_market_data_example.py
 ├── docs/
 ├── pyproject.toml
 ├── mcp_config.json
 ├── start_stock_market_service.py
+├── start_kph_market_data_service.py
 ├── README.md
 └── PROJECT_SUMMARY.md
 ```
@@ -32,12 +43,18 @@ mcpServers/
 
 ### 1. A股行情数据服务
 
+- **get_minute_kline**: 获取1分钟K线数据
+- **get_daily_kline**: 获取日K线数据
 - **get_stock_quote**: 获取股票实时行情
-- **get_stock_kline**: 获取股票K线数据
-- **get_stock_list**: 获取股票列表
-- **search_stock**: 搜索股票
-- **get_market_indices**: 获取市场指数
-- **get_hot_stocks**: 获取热门股票
+
+### 2. 开盘红平台行情数据服务
+
+- **get_live_content**: 获取当日大盘直播内容
+- **get_limit_up_ladder**: 获取当日涨停天梯数据
+- **get_market_highlights**: 获取当日盘面亮点数据
+- **get_historical_live_content**: 获取历史大盘直播内容
+- **get_historical_limit_up_ladder**: 获取历史涨停天梯数据
+- **get_historical_market_highlights**: 获取历史盘面亮点数据
 
 ## 技术栈
 
@@ -58,19 +75,27 @@ uv pip install -e ".[dev]"
 ### 2. 启动服务
 
 ```bash
+# 启动A股行情数据服务
 python start_stock_market_service.py
+
+# 启动开盘红平台行情数据服务
+python start_kph_market_data_service.py
 ```
 
 ### 3. 运行测试
 
 ```bash
-pytest tests/test_stock_market.py -v
+pytest tests/ -v
 ```
 
 ### 4. 运行示例
 
 ```bash
+# 运行A股行情数据示例
 python examples/stock_market_example.py
+
+# 运行开盘红平台行情数据示例
+python examples/kph_market_data_example.py
 ```
 
 ## 开发指南
@@ -106,11 +131,11 @@ mypy src
 
 ## 下一步计划
 
-1. 实现实际的A股数据获取接口
-2. 添加更多MCP服务
-3. 完善错误处理和日志记录
-4. 添加配置文件支持
-5. 实现服务注册和发现机制
+1. 实现更多的MCP服务
+2. 完善错误处理和日志记录
+3. 添加配置文件支持
+4. 实现服务注册和发现机制
+5. 添加性能监控和统计功能
 
 ## 许可证
 

@@ -10,8 +10,16 @@ mcpServers/
 │   └── mcp_servers/
 │       ├── __init__.py
 │       ├── base.py
-│       └── stock_market/
+│       ├── stock_market/
+│       │   ├── __init__.py
+│       │   ├── service.py
+│       │   └── main.py
+│       └── kph_market_data/
 │           ├── __init__.py
+│           ├── config.py
+│           ├── logger.py
+│           ├── client.py
+│           ├── models.py
 │           ├── service.py
 │           └── main.py
 ├── tests/
@@ -22,6 +30,7 @@ mcpServers/
 ├── pyproject.toml
 ├── mcp_config.json
 ├── start_stock_market_service.py
+├── start_kph_market_data_service.py
 └── README.md
 ```
 
@@ -47,23 +56,44 @@ python start_stock_market_service.py
 # 将mcp_config.json中的配置添加到您的MCP客户端配置中
 ```
 
-### 2. 使用示例
+### 2. 启动开盘红平台行情数据服务
 
 ```bash
-# 运行示例
-python examples/stock_market_example.py
+# 直接运行启动脚本
+python start_kph_market_data_service.py
+
+# 或者使用MCP客户端配置
+# 将mcp_config.json中的配置添加到您的MCP客户端配置中
 ```
 
-### 3. 代码中使用
+### 3. 使用示例
+
+```bash
+# 运行A股行情数据示例
+python examples/stock_market_example.py
+
+# 运行开盘红平台行情数据示例
+python examples/kph_market_data_example.py
+```
+
+### 4. 代码中使用
 
 ```python
 from src.mcp_servers.stock_market.service import StockMarketService
+from src.mcp_servers.kph_market_data.service import KPHMarketDataService
 
-# 初始化服务
-service = StockMarketService()
+# 初始化A股行情数据服务
+stock_service = StockMarketService()
 
 # 获取服务信息
-info = service.get_server_info()
+info = stock_service.get_server_info()
+print(f"服务名称: {info['name']}")
+
+# 初始化开盘红平台行情数据服务
+kph_service = KPHMarketDataService()
+
+# 获取服务信息
+info = kph_service.get_server_info()
 print(f"服务名称: {info['name']}")
 ```
 
@@ -93,6 +123,15 @@ flake8 src
 - 搜索股票
 - 获取市场指数
 - 获取热门股票
+
+### 开盘红平台行情数据服务
+
+- 获取当日大盘直播内容（实时）
+- 获取当日涨停天梯数据（实时）
+- 获取当日盘面亮点数据（实时）
+- 获取历史大盘直播内容
+- 获取历史涨停天梯数据
+- 获取历史盘面亮点数据
 
 ## 许可证
 

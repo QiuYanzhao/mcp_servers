@@ -4,6 +4,11 @@
       "command": "python",
       "args": ["start_stock_market_service.py"],
       "env": {}
+    },
+    "kph-market-data": {
+      "command": "python",
+      "args": ["start_kph_market_data_service.py"],
+      "env": {}
     }
   }
 }
