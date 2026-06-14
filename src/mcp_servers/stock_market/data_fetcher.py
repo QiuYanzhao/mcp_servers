@@ -8,8 +8,7 @@ A股行情数据获取模块
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import pandas as pd
 from mootdx.quotes import Quotes
@@ -19,8 +18,9 @@ logger = logging.getLogger(__name__)
 
 # 涨跌停计算常量
 LIMIT_UP_RATIO = 0.10  # 主板涨跌停比例10%
-LIMIT_UP_RATIO_ST = 0.05  # ST股涨跌停比例5%
-LIMIT_UP_RATIO_KC = 0.20  # 科创板/创业板涨跌停比例20%
+
+# 默认服务器（通达信服务器）
+DEFAULT_SERVER = "119.147.212.81:7709"
 
 
 class StockDataFetcher:
@@ -30,8 +30,14 @@ class StockDataFetcher:
     使用mootdx获取A股行情数据，提供前复权处理和指标计算功能。
     """
 
-    def __init__(self):
-        """初始化数据获取器"""
+    def __init__(self, server: str = DEFAULT_SERVER):
+        """
+        初始化数据获取器
+
+        Args:
+            server: 通达信服务器地址，格式 "ip:port"
+        """
+        self._server = server
         self._client: Optional[Quotes] = None
 
     # 通达信行情服务器列表（备用）
@@ -57,7 +63,7 @@ class StockDataFetcher:
                     self._client = Quotes.factory(
                         market="std",
                         server=(host, port),
-                        heartbeat=True,
+                        timeout=15,
                     )
                     logger.info(f"成功连接通达信服务器: {host}:{port}")
                     return self._client
@@ -76,9 +82,7 @@ class StockDataFetcher:
             self._client = None
             logger.info("关闭mootdx行情客户端")
 
-    def get_minute_data(
-        self, symbol: str, count: int = 240
-    ) -> Dict:
+    def get_minute_data(self, symbol: str, count: int = 240) -> Dict:
         """
         获取1分钟K线数据
 
@@ -109,12 +113,12 @@ class StockDataFetcher:
                 data_list.append(
                     {
                         "datetime": str(row.get("datetime", "")),
-                        "open": float(row.get("open", 0)),
-                        "high": float(row.get("high", 0)),
-                        "low": float(row.get("low", 0)),
-                        "close": float(row.get("close", 0)),
-                        "volume": int(row.get("volume", 0)),
-                        "amount": float(row.get("amount", 0)),
+                        "open": round(float(row.get("open", 0)), 2),
+                        "high": round(float(row.get("high", 0)), 2),
+                        "low": round(float(row.get("low", 0)), 2),
+                        "close": round(float(row.get("close", 0)), 2),
+                        "volume": int(row.get("volume", row.get("vol", 0))),
+                        "amount": round(float(row.get("amount", 0)), 2),
                     }
                 )
 
@@ -162,14 +166,18 @@ class StockDataFetcher:
             # 前复权处理
             df = self._apply_qfq(client, symbol, df)
 
+            # 确保列名一致（mootdx返回的列名可能是close或vol）
+            close_col = "close" if "close" in df.columns else "close"
+            vol_col = "volume" if "volume" in df.columns else "vol"
+
             # 计算均线
             if include_ma:
-                df["ma5"] = df["close"].rolling(window=5).mean()
-                df["ma10"] = df["close"].rolling(window=10).mean()
-                df["ma20"] = df["close"].rolling(window=20).mean()
+                df["ma5"] = df[close_col].rolling(window=5).mean()
+                df["ma10"] = df[close_col].rolling(window=10).mean()
+                df["ma20"] = df[close_col].rolling(window=20).mean()
 
             # 计算昨日收盘价
-            df["pre_close"] = df["close"].shift(1)
+            df["pre_close"] = df[close_col].shift(1)
 
             # 计算涨跌停价格
             if include_limit:
@@ -184,8 +192,8 @@ class StockDataFetcher:
                     "open": round(float(row.get("open", 0)), 2),
                     "high": round(float(row.get("high", 0)), 2),
                     "low": round(float(row.get("low", 0)), 2),
-                    "close": round(float(row.get("close", 0)), 2),
-                    "volume": int(row.get("volume", 0)),
+                    "close": round(float(row.get(close_col, 0)), 2),
+                    "volume": int(row.get(vol_col, 0)),
                     "amount": round(float(row.get("amount", 0)), 2),
                 }
 
@@ -299,24 +307,21 @@ class StockDataFetcher:
                 return {"error": "未获取到数据"}
 
             row = df.iloc[0]
-            # mootdx quotes() 字段说明：
-            # - price: 当前价（即收盘价/最新价）
-            # - last_close: 昨日收盘价
-            # - vol/volume: 成交量（两个字段值相同）
-            # - 注意：mootdx 不返回股票名称，code 是股票代码
-            last_close = float(row.get("last_close", 0))
-            price = float(row.get("price", 0))
+
+            # mootdx返回的列名: price(当前价), last_close(昨收), open, high, low, vol, amount
+            last_close = round(float(row.get("last_close", 0)), 2)
+            price = round(float(row.get("price", 0)), 2)
             return {
                 "symbol": symbol,
-                "name": str(row.get("code", "")),
-                "open": float(row.get("open", 0)),
-                "high": float(row.get("high", 0)),
-                "low": float(row.get("low", 0)),
-                "close": price,
+                "code": str(row.get("code", "")),
+                "price": price,
                 "last_close": last_close,
                 "change_pct": round((price - last_close) / last_close * 100, 2) if last_close > 0 else 0,
-                "volume": int(row.get("vol", 0)),
-                "amount": float(row.get("amount", 0)),
+                "open": round(float(row.get("open", 0)), 2),
+                "high": round(float(row.get("high", 0)), 2),
+                "low": round(float(row.get("low", 0)), 2),
+                "volume": int(row.get("vol", row.get("volume", 0))),
+                "amount": round(float(row.get("amount", 0)), 2),
             }
 
         except Exception as e:
