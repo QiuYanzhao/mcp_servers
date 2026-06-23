@@ -7,8 +7,10 @@ A股行情数据获取模块
 - 前复权处理
 """
 
+import json
 import logging
-from typing import Dict, Optional
+import os
+from typing import Dict, List, Optional
 
 import pandas as pd
 from mootdx.quotes import Quotes
@@ -17,7 +19,7 @@ from mootdx.quotes import Quotes
 logger = logging.getLogger(__name__)
 
 # 涨跌停计算常量
-LIMIT_UP_RATIO = 0.10  # 主板涨跌停比例10%
+DEFAULT_LIMIT_RATIO = 0.10  # 主板涨跌停比例10%（默认）
 
 # 默认服务器（通达信服务器）
 DEFAULT_SERVER = "119.147.212.81:7709"
@@ -39,6 +41,8 @@ class StockDataFetcher:
         """
         self._server = server
         self._client: Optional[Quotes] = None
+        self._stock_name_to_code: Dict[str, str] = {}
+        self._load_stock_list()
 
     # 通达信行情服务器列表（备用）
     _TDX_SERVERS = [
@@ -47,6 +51,40 @@ class StockDataFetcher:
         ("124.70.176.52", 7709),
         ("121.36.54.217", 7709),
     ]
+
+    @staticmethod
+    def _get_limit_ratio(symbol: str, stock_name: str = "") -> float:
+        """
+        根据股票代码和名称动态计算涨跌停比例
+
+        规则：
+        - ST / *ST 股票 → 5%
+        - 科创板（688xxx）→ 20%
+        - 创业板（300xxx, 301xxx）→ 20%
+        - 北交所（8开头，如83xxxx, 87xxxx）→ 30%
+        - 其余主板 → 10%
+
+        Args:
+            symbol: 股票代码，如 "600519"
+            stock_name: 股票名称，用于检测ST
+
+        Returns:
+            涨跌停比例（如 0.10 表示 ±10%）
+        """
+        # 通过名称检测ST
+        if stock_name and ("ST" in stock_name.upper() or "*ST" in stock_name.upper()):
+            return 0.05
+
+        # 通过代码前缀区分板块
+        code = symbol.strip()
+        if code.startswith("688"):
+            return 0.20  # 科创板
+        if code.startswith(("300", "301")):
+            return 0.20  # 创业板
+        if code.startswith("8"):
+            return 0.30  # 北交所
+
+        return DEFAULT_LIMIT_RATIO  # 主板
 
     def _get_client(self) -> Quotes:
         """
@@ -139,6 +177,7 @@ class StockDataFetcher:
         count: int = 120,
         include_ma: bool = True,
         include_limit: bool = True,
+        stock_name: str = "",
     ) -> Dict:
         """
         获取日K线数据
@@ -148,6 +187,7 @@ class StockDataFetcher:
             count: 获取的数据条数，默认120
             include_ma: 是否计算均线（5、10、20日）
             include_limit: 是否计算涨跌停价格
+            stock_name: 股票名称，用于区分ST股票（可选）
 
         Returns:
             包含日K线数据的字典
@@ -179,10 +219,24 @@ class StockDataFetcher:
             # 计算昨日收盘价
             df["pre_close"] = df[close_col].shift(1)
 
-            # 计算涨跌停价格
+            # 计算涨跌停价格（根据股票代码/名称动态匹配比例）
             if include_limit:
-                df["limit_up"] = df["pre_close"] * (1 + LIMIT_UP_RATIO)
-                df["limit_down"] = df["pre_close"] * (1 - LIMIT_UP_RATIO)
+                ratio = self._get_limit_ratio(symbol, stock_name)
+                df["limit_up"] = df["pre_close"] * (1 + ratio)
+                df["limit_down"] = df["pre_close"] * (1 - ratio)
+                # 判断是否涨停/跌停（收盘价达到涨跌停价，容差 0.001 避免浮点误差）
+                df["is_limit_up"] = df.apply(
+                    lambda r: bool(r[close_col] >= r["limit_up"] - 0.001)
+                    if pd.notna(r.get("limit_up"))
+                    else False,
+                    axis=1,
+                )
+                df["is_limit_down"] = df.apply(
+                    lambda r: bool(r[close_col] <= r["limit_down"] + 0.001)
+                    if pd.notna(r.get("limit_down"))
+                    else False,
+                    axis=1,
+                )
 
             # 转换数据格式
             data_list = []
@@ -222,7 +276,7 @@ class StockDataFetcher:
                     else None
                 )
 
-                # 添加涨跌停价格
+                # 添加涨跌停价格和状态
                 if include_limit:
                     item["limit_up"] = (
                         round(float(row["limit_up"]), 2)
@@ -231,6 +285,16 @@ class StockDataFetcher:
                     )
                     item["limit_down"] = (
                         round(float(row["limit_down"]), 2)
+                        if pd.notna(row.get("limit_down"))
+                        else None
+                    )
+                    item["is_limit_up"] = (
+                        bool(row["is_limit_up"])
+                        if pd.notna(row.get("limit_up"))
+                        else None
+                    )
+                    item["is_limit_down"] = (
+                        bool(row["is_limit_down"])
                         if pd.notna(row.get("limit_down"))
                         else None
                     )
@@ -245,7 +309,9 @@ class StockDataFetcher:
                 "indicators": {
                     "ma": ["ma5", "ma10", "ma20"] if include_ma else [],
                     "pre_close": True,
-                    "limit": ["limit_up", "limit_down"] if include_limit else [],
+                    "limit": ["limit_up", "limit_down", "is_limit_up", "is_limit_down"]
+                    if include_limit
+                    else [],
                 },
                 "data": data_list,
             }
@@ -327,3 +393,57 @@ class StockDataFetcher:
         except Exception as e:
             logger.error(f"获取{symbol}的实时行情失败: {e}")
             return {"error": str(e)}
+
+    def _load_stock_list(self):
+        """从文件加载股票名称->代码映射到内存"""
+        data_dir = os.path.dirname(os.path.abspath(__file__))
+        stock_list_path = os.path.join(data_dir, "stock_list.json")
+        try:
+            with open(stock_list_path, "r", encoding="utf-8") as f:
+                stock_list = json.load(f)
+            self._stock_name_to_code = {item["name"]: item["code"] for item in stock_list}
+            logger.info(f"股票列表已加载，共 {len(self._stock_name_to_code)} 条")
+        except FileNotFoundError:
+            logger.warning(f"股票列表文件不存在: {stock_list_path}")
+            self._stock_name_to_code = {}
+        except Exception as e:
+            logger.error(f"加载股票列表失败: {e}")
+            self._stock_name_to_code = {}
+
+    def resolve_stock_code(self, stock_code: Optional[str] = None, stock_name: Optional[str] = None) -> str:
+        """
+        解析股票代码：优先使用 stock_code，否则通过 stock_name 查找。
+
+        Args:
+            stock_code: 股票代码
+            stock_name: 股票名称
+
+        Returns:
+            股票代码
+
+        Raises:
+            ValueError: 无法解析出有效的股票代码时
+        """
+        if stock_code and stock_code.strip():
+            return stock_code.strip()
+
+        if stock_name and stock_name.strip():
+            name = stock_name.strip()
+            # 精确匹配
+            code = self._stock_name_to_code.get(name)
+            if code:
+                return code
+            # 模糊匹配
+            candidates = [
+                (n, c) for n, c in self._stock_name_to_code.items() if name in n
+            ]
+            if len(candidates) == 1:
+                return candidates[0][1]
+            if len(candidates) > 1:
+                names = ", ".join(f"{n}({c})" for n, c in candidates[:10])
+                raise ValueError(
+                    f"股票名称 '{name}' 匹配到多个结果: {names}，请补充更多关键字或使用股票代码"
+                )
+            raise ValueError(f"未找到名称包含 '{name}' 的股票")
+
+        raise ValueError("请提供股票代码(stock_code)或股票名称(stock_name)")

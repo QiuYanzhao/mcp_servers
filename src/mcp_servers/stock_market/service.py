@@ -41,15 +41,17 @@ class StockMarketService(BaseMCPServer):
         """注册工具方法"""
 
         @self.mcp.tool()
-        def get_minute_kline(stock_code: str, count: int = 240) -> str:
+        def get_minute_kline(stock_code: str = "", stock_name: str = "", count: int = 240) -> str:
             """
             获取1分钟K线数据
 
             用于获取单日的K线形状和量能情况。
             数据已进行前复权处理。
+            通过 stock_code 或 stock_name 指定股票，优先使用 stock_code。
 
             Args:
-                stock_code: 股票代码，如 "600519" (贵州茅台)
+                stock_code: 股票代码，如 "600519"（可选，与 stock_name 二选一）
+                stock_name: 股票名称，如 "贵州茅台"（可选，stock_code 为空时使用）
                 count: 获取的数据条数，默认240（约1个交易日）
 
             Returns:
@@ -63,15 +65,16 @@ class StockMarketService(BaseMCPServer):
                 - amount: 成交额
             """
             try:
-                logger.info(f"获取1分钟K线数据: {stock_code}, 数量: {count}")
-                result = self._data_fetcher.get_minute_data(stock_code, count)
+                symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
+                logger.info(f"获取1分钟K线数据: {symbol}, 数量: {count}")
+                result = self._data_fetcher.get_minute_data(symbol, count)
                 return json.dumps(result, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"获取1分钟K线数据失败: {e}")
                 return json.dumps({"error": str(e)}, ensure_ascii=False)
 
         @self.mcp.tool()
-        def get_daily_kline(stock_code: str, count: int = 120) -> str:
+        def get_daily_kline(stock_code: str = "", stock_name: str = "", count: int = 120) -> str:
             """
             获取日K线数据
 
@@ -82,12 +85,20 @@ class StockMarketService(BaseMCPServer):
             - 昨日收盘价（pre_close）
             - 今日涨停价（limit_up）
             - 今日跌停价（limit_down）
+            - 是否涨停（is_limit_up）
+            - 是否跌停（is_limit_down）
 
             数据已进行前复权处理。
-            涨跌停价格按主板10%计算。
+            涨跌停价格根据股票代码自动匹配板块比例：
+            - 主板：±10%
+            - 科创板(688xxx)、创业板(300xxx/301xxx)：±20%
+            - 北交所(8开头)：±30%
+            - ST股票（名称含ST）：±5%
+            通过 stock_code 或 stock_name 指定股票，优先使用 stock_code。
 
             Args:
-                stock_code: 股票代码，如 "600519" (贵州茅台)
+                stock_code: 股票代码，如 "600519"（可选，与 stock_name 二选一）
+                stock_name: 股票名称，如 "贵州茅台"（可选，stock_code 为空时使用）
                 count: 获取的K线数量，默认120
 
             Returns:
@@ -105,29 +116,36 @@ class StockMarketService(BaseMCPServer):
                 - pre_close: 昨日收盘价
                 - limit_up: 涨停价
                 - limit_down: 跌停价
+                - is_limit_up: 是否涨停（收盘价 >= 涨停价）
+                - is_limit_down: 是否跌停（收盘价 <= 跌停价）
             """
             try:
-                logger.info(f"获取日K线数据: {stock_code}, 数量: {count}")
-                result = self._data_fetcher.get_daily_kline(stock_code, count)
+                symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
+                logger.info(f"获取日K线数据: {symbol}, 数量: {count}")
+                result = self._data_fetcher.get_daily_kline(symbol, count, stock_name=stock_name or "")
                 return json.dumps(result, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"获取日K线数据失败: {e}")
                 return json.dumps({"error": str(e)}, ensure_ascii=False)
 
         @self.mcp.tool()
-        def get_stock_quote(stock_code: str) -> str:
+        def get_stock_quote(stock_code: str = "", stock_name: str = "") -> str:
             """
             获取股票实时行情
 
+            通过 stock_code 或 stock_name 指定股票，优先使用 stock_code。
+
             Args:
-                stock_code: 股票代码，如 "600519" (贵州茅台)
+                stock_code: 股票代码，如 "600519"（可选，与 stock_name 二选一）
+                stock_name: 股票名称，如 "贵州茅台"（可选，stock_code 为空时使用）
 
             Returns:
                 包含股票实时行情信息的JSON字符串
             """
             try:
-                logger.info(f"获取股票实时行情: {stock_code}")
-                result = self._data_fetcher.get_realtime_quote(stock_code)
+                symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
+                logger.info(f"获取股票实时行情: {symbol}")
+                result = self._data_fetcher.get_realtime_quote(symbol)
                 return json.dumps(result, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"获取股票实时行情失败: {e}")
