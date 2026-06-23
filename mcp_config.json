@@ -9,6 +9,11 @@
       "command": "python",
       "args": ["start_kph_market_data_service.py"],
       "env": {}
+    },
+    "star-stocks": {
+      "command": "python",
+      "args": ["start_star_stocks_service.py"],
+      "env": {}
     }
   }
 }

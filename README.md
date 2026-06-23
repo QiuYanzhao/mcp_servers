@@ -22,6 +22,13 @@ mcpServers/
 │           ├── models.py
 │           ├── service.py
 │           └── main.py
+│       └── star_stocks/
+│           ├── __init__.py
+│           ├── config.py
+│           ├── db.py
+│           ├── helpers.py
+│           ├── service.py
+│           └── main.py
 ├── tests/
 │   └── test_stock_market.py
 ├── examples/
@@ -31,6 +38,7 @@ mcpServers/
 ├── mcp_config.json
 ├── start_stock_market_service.py
 ├── start_kph_market_data_service.py
+├── start_star_stocks_service.py
 └── README.md
 ```
 
@@ -66,7 +74,14 @@ python start_kph_market_data_service.py
 # 将mcp_config.json中的配置添加到您的MCP客户端配置中
 ```
 
-### 3. 使用示例
+### 3. 启动 star_stocks 题材数据服务
+
+```bash
+# 确保 ../star_stocks/.env 已配置 DB_PASSWORD
+python start_star_stocks_service.py
+```
+
+### 4. 使用示例
 
 ```bash
 # 运行A股行情数据示例
@@ -81,6 +96,7 @@ python examples/kph_market_data_example.py
 ```python
 from src.mcp_servers.stock_market.service import StockMarketService
 from src.mcp_servers.kph_market_data.service import KPHMarketDataService
+from src.mcp_servers.star_stocks.service import StarStocksService
 
 # 初始化A股行情数据服务
 stock_service = StockMarketService()

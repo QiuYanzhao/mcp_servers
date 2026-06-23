@@ -3,5 +3,6 @@
 
 from .base import BaseMCPServer
 from .kph_market_data.service import KPHMarketDataService
+from .star_stocks.service import StarStocksService
 
-__all__ = ["BaseMCPServer", "KPHMarketDataService"]
+__all__ = ["BaseMCPServer", "KPHMarketDataService", "StarStocksService"]

@@ -3,15 +3,19 @@ name = "mcp-servers"
 version = "0.1.0"
 description = "MCP服务器集合，包含多个MCP服务实现"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "A58", email = "a58@example.com"}
 ]
 dependencies = [
     "mcp[cli]>=1.0.0",
-    "requests>=2.25.0"
+    "requests>=2.25.0",
+    "star-stocks",
 ]
+
+[tool.uv.sources]
+star-stocks = { path = "../star_stocks", editable = true }
 
 [project.optional-dependencies]
 dev = [
@@ -30,10 +34,10 @@ packages = ["src/mcp_servers"]
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py311']
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 

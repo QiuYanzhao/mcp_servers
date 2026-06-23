@@ -38,6 +38,18 @@ python start_kph_market_data_service.py
 python -m src.mcp_servers.kph_market_data.main
 ```
 
+#### star_stocks 题材数据服务
+
+```bash
+# 方式1：直接运行启动脚本
+python start_star_stocks_service.py
+
+# 方式2：使用模块方式运行
+python -m src.mcp_servers.star_stocks.main
+```
+
+**前置条件：** 同级目录 `star_stocks` 已配置 `.env`（含 `DB_PASSWORD`）。
+
 ### 3. MCP客户端配置
 
 将以下配置添加到MCP客户端（如Claude Desktop）：
@@ -54,6 +66,12 @@ python -m src.mcp_servers.kph_market_data.main
     "kph-market-data": {
       "command": "uv",
       "args": ["run", "python", "start_kph_market_data_service.py"],
+      "cwd": "/Users/qyz/TraeProjects/mcp_servers",
+      "env": {}
+    },
+    "star-stocks": {
+      "command": "uv",
+      "args": ["run", "python", "start_star_stocks_service.py"],
       "cwd": "/Users/qyz/TraeProjects/mcp_servers",
       "env": {}
     }
@@ -343,3 +361,37 @@ uv pip install requests
 
 - [架构文档](docs/stock_market_architecture.md) - 详细的技术架构说明
 - [调研报告](docs/stock_data_solution_research.md) - mootdx与腾讯财经API对比分析
+
+## star_stocks 题材数据服务
+
+维护 `star_stocks` 项目中的题材、细分方向、个股及关联数据。
+
+### 工具列表
+
+| 工具 | 说明 |
+|------|------|
+| `list_themes` | 列出题材，可按 role_type 筛选 |
+| `get_theme` | 获取单个题材 |
+| `create_theme` | 创建题材 |
+| `update_theme` | 更新题材 |
+| `delete_theme` | 删除题材（级联） |
+| `list_sub_directions` | 列出某题材下的细分方向 |
+| `create_sub_direction` | 创建细分方向 |
+| `update_sub_direction` | 更新细分方向 |
+| `delete_sub_direction` | 删除细分方向 |
+| `list_stocks` | 搜索个股 |
+| `create_stock` | 创建/更新个股 |
+| `delete_stock` | 删除个股 |
+| `list_theme_stocks` | 列出题材或细分方向下的个股条目 |
+| `create_theme_stock` | 添加个股关联 |
+| `update_theme_stock` | 更新个股关联 |
+| `delete_theme_stock` | 删除个股关联 |
+| `get_overview` | 全量题材树概览 |
+| `import_markdown` | 从 Markdown 文件导入 |
+
+### 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `STAR_STOCKS_ROOT` | 可选，star_stocks 项目根目录，默认 `../star_stocks` |
+| `DB_*` | 从 `star_stocks/.env` 自动加载 |
