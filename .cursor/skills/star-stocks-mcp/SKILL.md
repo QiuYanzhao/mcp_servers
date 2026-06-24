@@ -3,121 +3,230 @@ name: star-stocks-mcp
 description: >-
   Guides use of the star-stocks MCP server (题材标志性个股): query theme/sub-direction/stock
   trees, create/update/delete via 12 tools. Use when maintaining 炒作方向、细分方向、辨识度个股,
-  calling star-stocks MCP, or editing star_stocks MySQL data through MCP.
+  calling star-stocks MCP, or editing star_stocks data through MCP.
 ---
 
 # star-stocks MCP 使用指南
 
-MCP 服务名：`star-stocks`（v2.0.0）。所有 tool 返回 **JSON 字符串**；失败时为 `{"error": "..."}`。
+MCP 名：`star-stocks`。每个 tool 返回 **JSON 字符串**；成功为数据对象/数组，失败为 `{"error": "消息"}`。
 
-完整参数与返回 schema 见 [docs/star_stocks_architecture.md](../../../docs/star_stocks_architecture.md)。
+## 枚举
 
-## 数据模型（三层）
+**role_type**：`main_line`（主线）| `rotation`（轮动）| `normal`（普通）
+
+**stock_type**：`权重` | `身位股` | `人气股` | `中军` | `涨停个股`
+
+## 数据与 ID
 
 ```
-theme_direction（题材/炒作方向）
-  └── sub_direction（细分方向）
-        └── theme_stock（个股条目，含 code/name/type/score/remark）
+题材 theme_direction
+  └── 细分 sub_direction
+        └── 个股条目 theme_stock（code、name、type、score、remark 均在本行）
 ```
 
-- 无独立 `stock` 表；个股信息在 `theme_stock` 一行内。
-- `theme_id` 与 `sub_direction_id` 在个股上**二选一**（题材直下 vs 挂细分）。
+| ID 字段 | 用途 |
+|---------|------|
+| `theme_id` | 题材；`create_sub_direction`、题材直下挂股、`get_theme_tree` |
+| `sub_direction_id` | 细分；向细分下挂股、`update_sub_direction` |
+| `entry_id` | **个股条目** id（`theme_stock.id`）；`update_theme_stock`、`delete_theme_stock` |
 
-## ID 含义（勿混用）
+树里 `stocks[].id` = `entry_id`。个股挂点：`theme_id` 与 `sub_direction_id` **二选一**非空。
 
-| 字段 | 表 | 用于 |
-|------|-----|------|
-| `theme_id` | theme_direction | 题材 CRUD、查树、新增细分 |
-| `sub_direction_id` | sub_direction | 细分 CRUD、向细分下挂股 |
-| `entry_id` | theme_stock | 更新/删除**个股条目**（`update_theme_stock` / `delete_theme_stock`） |
+## 返回结构
 
-树中个股的 `id` 即 `entry_id`。
+**StockItem**（树内个股）：
+```json
+{"id": 1001, "code": "300502", "name": "新易盛", "stock_type": "权重", "is_distinctive": true, "remark": "龙头", "score": 97}
+```
 
-## 查询：选哪个 tool
+**SubDirectionBrief**（列表查询中的细分）：
+```json
+{"id": 71, "name": "光纤", "score": 85}
+```
 
-| 用户需求 | Tool | 返回 |
-|----------|------|------|
-| 全部题材 + 细分列表，**不要个股** | `list_themes_with_sub_directions` | 题材数组，细分按 score 降序 |
-| **主线 + 轮动**完整树（含个股） | `list_main_rotation_trees` | `ThemeTreeOut[]`，主线在前 |
-| **某一个**题材的完整树 | `get_theme_tree(theme_id)` | 单个 `ThemeTreeOut` |
+**SubDirectionTree**（树内细分）：
+```json
+{"id": 71, "name": "光纤", "score": 85, "sort_order": 0, "stocks": [/* StockItem[] */]}
+```
 
-不要对「只要列表」的场景调用 `get_theme_tree` 逐条拉取。  
-查询结果已按业务规则排序，**无需再排序**。
+**ThemeTree**（完整题材树）：
+```json
+{
+  "id": 1, "name": "科技", "role_type": "main_line", "rotation_rank": null,
+  "summary": "强分化", "sort_order": 0,
+  "direct_stocks": [/* 题材直下 StockItem[] */],
+  "sub_directions": [/* SubDirectionTree[] */]
+}
+```
 
-`ThemeTreeOut` 含 `direct_stocks`（题材直下个股）和 `sub_directions[].stocks`。
+**ThemeWithSubs**（题材+细分，无个股）：
+```json
+{
+  "id": 1, "name": "科技", "role_type": "main_line", "rotation_rank": null, "summary": "...",
+  "sub_directions": [/* SubDirectionBrief[] */]
+}
+```
 
-## 写操作约束
+**Theme**（新增/更新题材返回）：
+```json
+{
+  "id": 1, "name": "科技", "role_type": "main_line", "rotation_rank": null, "summary": "...",
+  "sort_order": 0, "is_active": true, "created_at": "...", "updated_at": "..."
+}
+```
+
+**SubDirection**（新增/更新细分返回）：
+```json
+{"id": 71, "theme_id": 1, "name": "光纤", "score": 85, "sort_order": 0}
+```
+
+**ThemeStock**（新增/更新个股返回）：
+```json
+{
+  "id": 1001, "theme_id": null, "sub_direction_id": 71,
+  "code": "300502", "name": "新易盛", "stock_type": "权重",
+  "is_distinctive": true, "remark": "龙头", "score": 97, "sort_order": 0
+}
+```
+
+**DeleteResult**：`{"deleted": true, "entry_id"|"sub_direction_id"|"theme_id": <id>}`
+
+## 查询 tool 选型
+
+| 需求 | Tool |
+|------|------|
+| 全部题材+细分，**不要个股** | `list_themes_with_sub_directions` |
+| **主线+轮动**完整树（含个股） | `list_main_rotation_trees` |
+| **指定题材**完整树 | `get_theme_tree(theme_id)` |
+
+结果已排序，**勿再排序**。排序规则：题材 主线→轮动→普通；细分/个股按 `score` 降序，无评分最后。
+
+勿对「只要列表」场景逐个 `get_theme_tree`。
+
+---
+
+## 工具清单（12 个）
+
+### 查询
+
+#### list_themes_with_sub_directions
+- **参数**：无
+- **返回**：`ThemeWithSubs[]`
+
+#### list_main_rotation_trees
+- **参数**：无
+- **返回**：`ThemeTree[]`（仅 `main_line` / `rotation`）
+
+#### get_theme_tree
+- **参数**：`theme_id` int（必填）
+- **返回**：`ThemeTree`；不存在 → `{"error": "题材 {id} 不存在"}`
+
+---
 
 ### 新增
 
-| Tool | 要点 |
-|------|------|
-| `create_theme` | `name` 必填；`role_type` 默认 `normal` |
-| `create_sub_direction` | `theme_id` + `name` |
-| `create_theme_stock` | `code`+`name`+`stock_type` 必填；`theme_id` **XOR** `sub_direction_id` |
+#### create_theme
+| 参数 | 类型 | 必填 | 默认 |
+|------|------|------|------|
+| name | str | 是 | — |
+| role_type | enum | 否 | normal |
+| rotation_rank | int\|null | 否 | null |
+| summary | str\|null | 否 | null |
 
-`role_type`：`main_line` | `rotation` | `normal`（无 `new`）。  
-`stock_type`：`权重` | `身位股` | `人气股` | `中军` | `涨停个股`。
+- **返回**：`Theme`
 
-### 更新（仅允许下列字段）
+#### create_sub_direction
+| 参数 | 类型 | 必填 |
+|------|------|------|
+| theme_id | int | 是 |
+| name | str | 是 |
+| score | int\|null | 否（0–100） |
 
-| Tool | 可改字段 |
-|------|----------|
-| `update_theme` | `role_type`, `summary`（摘要/备注） |
-| `update_sub_direction` | `score`（必填） |
-| `update_theme_stock` | `score`, `remark`, `stock_type`, `is_distinctive` |
+- **返回**：`SubDirection`
 
-不要传 `name`、`sort_order` 等未开放字段。
+#### create_theme_stock
+| 参数 | 类型 | 必填 | 默认 |
+|------|------|------|------|
+| stock_type | enum | 是 | — |
+| code | str | 是 | — |
+| name | str | 是 | — |
+| theme_id | int\|null | 二选一 | null |
+| sub_direction_id | int\|null | 二选一 | null |
+| is_distinctive | bool | 否 | false |
+| remark | str\|null | 否 | null |
+| score | int\|null | 否 | null（0–100） |
 
-### 删除（均有级联）
+- **约束**：`theme_id` XOR `sub_direction_id`；同组 `code` 不可重复
+- **返回**：`ThemeStock`
 
-| Tool | 级联 |
-|------|------|
-| `delete_theme_stock(entry_id)` | 仅删该个股条目 |
-| `delete_sub_direction` | 删细分 + 其下全部个股 |
-| `delete_theme` | 删题材 + 全部细分 + 全部个股 |
+---
 
-## 推荐工作流
+### 更新（仅下列字段）
 
-**不知道 ID 时：**
+#### update_theme
+| 参数 | 类型 | 必填 |
+|------|------|------|
+| theme_id | int | 是 |
+| role_type | enum\|null | 至少其一 |
+| summary | str\|null | 至少其一 |
 
-1. `list_themes_with_sub_directions` → 拿 `theme_id`、`sub_direction_id`
-2. 需要个股详情 → `get_theme_tree(theme_id)` 或 `list_main_rotation_trees`
-3. 再 `create_*` / `update_*` / `delete_*`
+- **返回**：`Theme`
 
-**改某只个股评分/备注：**
+#### update_sub_direction
+| 参数 | 类型 | 必填 |
+|------|------|------|
+| sub_direction_id | int | 是 |
+| score | int\|null | 是（0–100） |
 
-1. `get_theme_tree` 找到 `stocks[].id`（即 `entry_id`）
-2. `update_theme_stock(entry_id, score=..., remark=...)`
+- **返回**：`SubDirection`
 
-**向细分加股：**
+#### update_theme_stock
+| 参数 | 类型 | 必填 |
+|------|------|------|
+| entry_id | int | 是 |
+| stock_type | enum\|null | 至少其一 |
+| is_distinctive | bool\|null | 至少其一 |
+| remark | str\|null | 至少其一 |
+| score | int\|null | 至少其一 |
 
+- **返回**：`ThemeStock`
+
+---
+
+### 删除
+
+#### delete_theme_stock
+- **参数**：`entry_id` int
+- **返回**：`{"deleted": true, "entry_id": ...}`
+
+#### delete_sub_direction
+- **参数**：`sub_direction_id` int（级联删其下个股）
+- **返回**：`{"deleted": true, "sub_direction_id": ...}`
+
+#### delete_theme
+- **参数**：`theme_id` int（级联删细分与个股）
+- **返回**：`{"deleted": true, "theme_id": ...}`
+
+---
+
+## 工作流
+
+**无 ID**：`list_themes_with_sub_directions` → 取 id → 需要个股时 `get_theme_tree` / `list_main_rotation_trees` → 写操作
+
+**改个股评分/备注**：`get_theme_tree` → `stocks[].id` 作 `entry_id` → `update_theme_stock`
+
+**向细分加股**：
 ```
-create_theme_stock(
-  sub_direction_id=<id>,
-  code="600519",
-  name="贵州茅台",
-  stock_type="权重",
-  score=90
-)
+create_theme_stock(sub_direction_id=71, code="600519", name="贵州茅台", stock_type="权重", score=90)
 ```
 
-**向题材直下加股（无细分）：**
-
+**题材直下加股**：
 ```
-create_theme_stock(theme_id=<id>, code=..., name=..., stock_type=...)
+create_theme_stock(theme_id=1, code="...", name="...", stock_type="权重")
 ```
 
-## 错误处理
+## 错误与边界
 
-- 返回含 `"error"` 键 → 向用户说明原因，先查 ID 或约束是否满足
-- `create_theme_stock` 同组下重复 `code` → 「该分组下已存在相同股票」
-- `get_theme_tree` 题材不存在 → 先用 `list_themes_with_sub_directions` 核对 ID
-
-## 不要使用的接口
-
-本 MCP **没有** overview/import、移动/复制个股、题材排序等 tool；需要时走 Web API 或告知用户不可用。
-
-## 启动前提
-
-`../star_stocks/.env` 已配置 `DB_PASSWORD`；MCP 配置见 `mcp_config.json` 中 `star-stocks`。
+- 响应含 `"error"` → 说明原因，核对 ID 与约束
+- 重复 code → 「该分组下已存在相同股票」
+- **无** import、overview、移动/复制个股、题材排序等 tool；用户需要时说明 MCP 不支持
