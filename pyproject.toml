@@ -11,7 +11,11 @@ authors = [
 dependencies = [
     "mcp[cli]>=1.0.0",
     "requests>=2.25.0",
+    "star-stocks",
 ]
+
+[tool.uv.sources]
+star-stocks = { path = "../star_stocks", editable = true }
 
 [project.optional-dependencies]
 dev = [
