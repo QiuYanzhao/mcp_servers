@@ -99,6 +99,7 @@ class LimitUpStock:
     theme_zt_count: int = 0
     amount_in: int = 0
     amount_out: int = 0
+    tags: str | None = None
 
     @classmethod
     def from_list(cls, data: list) -> LimitUpStock:

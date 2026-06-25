@@ -186,6 +186,46 @@ class TestKPHMarketDataService:
         assert "2026-06-14" in result
         assert "白酒" in result
         assert "贵州茅台" in result
+        assert "标签 —" in result
+
+    def test_attach_stock_tags(self):
+        service = KPHMarketDataService()
+        from src.mcp_servers.kph_market_data.models import LimitUpStock
+
+        stock = LimitUpStock(
+            code="600519",
+            name="贵州茅台",
+            board_height=3,
+            limit_up_time=1623456789,
+            theme_name="白酒",
+        )
+        response = LimitUpLadderResponse(stocks=[stock], themes=[], date="2026-06-14")
+
+        with patch(
+            "src.mcp_servers.kph_market_data.service.lookup_stock_tags",
+            return_value={"600519": "白酒,消费"},
+        ):
+            service._attach_stock_tags(response)
+
+        assert stock.tags == "白酒,消费"
+
+    def test_format_limit_up_ladder_with_tags(self):
+        service = KPHMarketDataService()
+        from src.mcp_servers.kph_market_data.models import LimitUpStock, LimitUpTheme
+
+        stock = LimitUpStock(
+            code="600519",
+            name="贵州茅台",
+            board_height=3,
+            limit_up_time=1623456789,
+            theme_name="白酒",
+            tags="白酒,消费",
+        )
+        theme = LimitUpTheme(name="白酒", zt_count=5, turnover=100000000)
+        response = LimitUpLadderResponse(stocks=[stock], themes=[theme], date="2026-06-14")
+
+        result = service._format_limit_up_ladder(response)
+        assert "标签 白酒,消费" in result
 
     def test_format_market_highlights(self):
         """测试格式化盘面亮点"""

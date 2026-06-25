@@ -14,6 +14,8 @@ from .models import (
     LiveContentResponse,
     MarketHighlightsResponse,
 )
+from .stock_tags import lookup_stock_tags
+from star_stocks.external.kaipanhong import normalize_stock_code
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -67,7 +69,7 @@ class KPHMarketDataService(BaseMCPServer):
             获取当日涨停天梯数据
 
             返回当日涨停题材排名和连板个股列表，包含题材涨停家数、成交额、
-            个股连板高度和涨停时间等信息。适用于分析当日市场情绪和题材热度。
+            个股连板高度、涨停时间、个股标签（来自 stock_info）等信息。
 
             Returns:
                 格式化的涨停天梯数据文本
@@ -77,6 +79,7 @@ class KPHMarketDataService(BaseMCPServer):
                 resp = self._client.fetch_limit_up_ladder()
                 if resp is None:
                     return "请求失败: 无法获取实时涨停天梯数据，请检查网络连接。"
+                self._attach_stock_tags(resp)
                 return self._format_limit_up_ladder(resp)
             except Exception as e:
                 logger.error(f"获取实时涨停天梯数据失败: {e}")
@@ -138,8 +141,8 @@ class KPHMarketDataService(BaseMCPServer):
             """
             获取历史涨停天梯数据
 
-            返回指定日期的涨停题材排名和连板个股列表，包含题材涨停家数、
-            成交额、个股连板高度和涨停时间等信息。适用于复盘历史题材表现。
+            返回指定日期的涨停题材排名和连板个股列表，包含题材涨停家数、成交额、
+            个股连板高度、涨停时间、个股标签（来自 stock_info）等信息。
 
             Args:
                 date: 历史日期，格式为 YYYY-MM-DD（如 2026-05-28）
@@ -152,6 +155,7 @@ class KPHMarketDataService(BaseMCPServer):
                 resp = self._client.fetch_historical_limit_up_ladder(date=date)
                 if resp is None:
                     return f"请求失败: 无法获取 {date} 的历史涨停天梯数据，请检查日期是否正确。"
+                self._attach_stock_tags(resp)
                 return self._format_limit_up_ladder(resp)
             except Exception as e:
                 logger.error(f"获取历史涨停天梯数据失败: {e}")
@@ -245,6 +249,12 @@ class KPHMarketDataService(BaseMCPServer):
 
         return "\n".join(lines)
 
+    def _attach_stock_tags(self, resp: LimitUpLadderResponse) -> None:
+        codes = [stock.code for stock in resp.stocks if stock.code]
+        tags_map = lookup_stock_tags(codes)
+        for stock in resp.stocks:
+            stock.tags = tags_map.get(normalize_stock_code(stock.code))
+
     def _format_limit_up_ladder(self, resp: LimitUpLadderResponse) -> str:
         """将涨停天梯响应格式化为可读文本"""
         lines: list[str] = []
@@ -259,9 +269,10 @@ class KPHMarketDataService(BaseMCPServer):
         for stock in sorted(resp.stocks, key=lambda s: s.board_height, reverse=True):
             if stock.board_height >= 1:
                 t = datetime.fromtimestamp(stock.limit_up_time).strftime("%H:%M:%S") if stock.limit_up_time else ""
+                tags = stock.tags or "—"
                 lines.append(
                     f"  {stock.name}({stock.code}): {stock.board_height}连板 "
-                    f"| 涨停时间 {t} | 题材 {stock.theme_name}"
+                    f"| 涨停时间 {t} | 题材 {stock.theme_name} | 标签 {tags}"
                 )
 
         return "\n".join(lines)
