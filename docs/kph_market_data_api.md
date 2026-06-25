@@ -167,6 +167,14 @@ kph_market_data/
 | 9 | Integer | 资金流入（元） |
 | 10 | Integer | 资金流出（元） |
 
+> **注意**: 索引 6-7 在代码中跳过未解析，实际含义未知。
+
+服务层在返回数据前会从 star_stocks 数据库查询个股标签，追加到 Python 模型的 `tags` 字段中（非 API 原始字段）：
+
+| Python 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `tags` | `str \| None` | 个股标签（如 `"白酒,消费"`），来自 stock_info 查询，无匹配时为 `None` |
+
 **Python 模型**: `LimitUpStock`
 
 ### 3.6 LimitUpTheme — 涨停题材
