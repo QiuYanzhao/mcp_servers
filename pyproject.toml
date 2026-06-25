@@ -10,6 +10,8 @@ authors = [
 ]
 dependencies = [
     "mcp[cli]>=1.0.0",
+    "mootdx>=0.9.11",
+    "pandas>=3.0.3",
     "requests>=2.25.0",
     "star-stocks",
 ]
