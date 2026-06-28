@@ -15,7 +15,7 @@
 
 服务版本：**2.1.0**（MCP 名称：`star-stocks`）
 
-> **评分说明**：查询结果仍包含 `score` 字段并按评分排序；MCP 与 Web/API **不提供**手动设置或更新评分的接口。评分数据主要来自 Markdown 导入及细分方向下个股均分重算。
+> **评分说明**：查询结果仍包含 `score` 字段并按评分排序。**MCP 不提供**设置或更新评分；**Web 页面与 REST API** 支持手工维护评分（内联编辑、表单、PATCH）。评分亦可来自 Markdown 导入及细分方向下个股均分重算。
 
 ### 技术栈
 
@@ -499,14 +499,14 @@ McpQueryService
 
 ### 6.1 与 star_stocks Web/API 的评分约定
 
-| 能力 | MCP | REST API（`/api/v1`） |
-|------|-----|------------------------|
+| 能力 | MCP | REST API / Web 页面 |
+|------|-----|---------------------|
 | 查询 `score` | ✅ 只读 | ✅ 只读（展示/排序） |
-| 新增时写入 `score` | ❌ | ❌（`SubDirectionCreate` / `ThemeStockCreate` 无 score 字段） |
-| PATCH 更新 `score` | ❌（无 `update_sub_direction`） | ❌（`SubDirectionPatch` / `ThemeStockPatch` 无 score 字段） |
+| 新增时写入 `score` | ❌（tool 无 score 参数） | ✅（`SubDirectionCreate` / `ThemeStockCreate`） |
+| PATCH 更新 `score` | ❌（无 `update_sub_direction`；`ThemeStockMcpUpdate` 无 score） | ✅（`SubDirectionPatch` / `ThemeStockPatch`；页面内联 htmx） |
 | Markdown 导入写入 `score` | ❌ MCP 无此 tool | ✅ `ImportService`（Web 导入入口） |
 
-细分方向 `score` 仍可在导入后由「下属个股均分」脚本或 `SubDirectionService.recalculate_score` 自动回写，但**不能**通过 MCP 或日常 CRUD API 手工改分。
+细分方向 `score` 亦可在个股评分变更后由 `SubDirectionService.recalculate_score` 自动均分回写；**仅 MCP 路径禁止手工改分**。
 
 ## 7. 排序规则汇总
 
