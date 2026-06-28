@@ -18,8 +18,6 @@ from star_stocks.models import ThemeStock  # noqa: E402
 from star_stocks.schemas import (  # noqa: E402
     SubDirectionCreate,
     SubDirectionOut,
-    SubDirectionPatch,
-    SubDirectionScoreUpdate,
     ThemeCreate,
     ThemeMcpUpdate,
     ThemeOut,
@@ -46,7 +44,7 @@ class StarStocksService(BaseMCPServer):
     """star_stocks 数据维护 MCP 服务。"""
 
     def __init__(self):
-        super().__init__("star-stocks", "2.0.0")
+        super().__init__("star-stocks", "2.1.0")
         self.register_tools()
         logger.info("star_stocks MCP 服务初始化完成")
 
@@ -55,7 +53,7 @@ class StarStocksService(BaseMCPServer):
 
         @self.mcp.tool()
         def list_themes_with_sub_directions() -> str:
-            """查询所有题材及包含的细分方向（不含个股），细分方向按评分从高到低排序。"""
+            """查询所有题材及包含的细分方向（不含个股），细分方向按评分从高到低排序（只读）。"""
             try:
                 with db_session() as db:
                     data = McpQueryService.list_themes_with_sub_directions(db)
@@ -68,7 +66,7 @@ class StarStocksService(BaseMCPServer):
         def list_main_rotation_trees() -> str:
             """
             查询主线与轮动题材的完整树（题材 → 细分方向 → 个股）。
-            主线在前、轮动在后；细分方向与个股均按评分降序。
+            主线在前、轮动在后；细分方向与个股均按评分降序（只读）。
             """
             try:
                 with db_session() as db:
@@ -82,7 +80,7 @@ class StarStocksService(BaseMCPServer):
         def get_theme_tree(theme_id: int) -> str:
             """
             查询指定题材的完整树（题材 → 细分方向 → 个股）。
-            细分方向与个股均按评分降序。
+            细分方向与个股均按评分降序（只读）。
             """
             try:
                 with db_session() as db:
@@ -119,14 +117,10 @@ class StarStocksService(BaseMCPServer):
                 return err(str(e))
 
         @self.mcp.tool()
-        def create_sub_direction(
-            theme_id: int,
-            name: str,
-            score: int | None = None,
-        ) -> str:
-            """向指定题材下新增细分方向。"""
+        def create_sub_direction(theme_id: int, name: str) -> str:
+            """向指定题材下新增细分方向（不可设置评分）。"""
             try:
-                data = SubDirectionCreate(theme_id=theme_id, name=name, score=score)
+                data = SubDirectionCreate(theme_id=theme_id, name=name)
                 with db_session() as db:
                     sub = SubDirectionService.create(db, data)
                     return ok(SubDirectionOut.model_validate(sub))
@@ -143,9 +137,8 @@ class StarStocksService(BaseMCPServer):
             sub_direction_id: int | None = None,
             is_distinctive: bool = False,
             remark: str | None = None,
-            score: int | None = None,
         ) -> str:
-            """向题材或细分方向下新增个股。theme_id 与 sub_direction_id 二选一。"""
+            """向题材或细分方向下新增个股。theme_id 与 sub_direction_id 二选一（不可设置评分）。"""
             try:
                 data = ThemeStockCreate(
                     theme_id=theme_id,
@@ -155,7 +148,6 @@ class StarStocksService(BaseMCPServer):
                     stock_type=stock_type,
                     is_distinctive=is_distinctive,
                     remark=remark,
-                    score=score,
                 )
                 with db_session() as db:
                     entry = ThemeStockService.create(db, data)
@@ -189,41 +181,18 @@ class StarStocksService(BaseMCPServer):
                 return err(str(e))
 
         @self.mcp.tool()
-        def update_sub_direction(
-            sub_direction_id: int,
-            score: int | None = None,
-        ) -> str:
-            """更新细分方向：仅允许修改评分。"""
-            try:
-                if score is None:
-                    return err("请提供 score")
-                data = SubDirectionScoreUpdate(score=score)
-                patch = SubDirectionPatch(**data.model_dump())
-                with db_session() as db:
-                    sub = SubDirectionService.get(db, sub_direction_id)
-                    if not sub:
-                        return err(f"细分方向 {sub_direction_id} 不存在")
-                    sub = SubDirectionService.patch(db, sub, patch)
-                    return ok(SubDirectionOut.model_validate(sub))
-            except Exception as e:
-                logger.exception("update_sub_direction failed")
-                return err(str(e))
-
-        @self.mcp.tool()
         def update_theme_stock(
             entry_id: int,
             stock_type: StockType | None = None,
             is_distinctive: bool | None = None,
             remark: str | None = None,
-            score: int | None = None,
         ) -> str:
-            """更新个股：仅允许修改评分、备注、类型、是否最具辨识度。"""
+            """更新个股：仅允许修改备注、类型、是否最具辨识度（不可修改评分）。"""
             try:
                 fields = {
                     "stock_type": stock_type,
                     "is_distinctive": is_distinctive,
                     "remark": remark,
-                    "score": score,
                 }
                 payload = {k: v for k, v in fields.items() if v is not None}
                 if not payload:

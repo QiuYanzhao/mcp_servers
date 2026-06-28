@@ -6,6 +6,60 @@ import pytest
 from src.mcp_servers.stock_market.data_fetcher import StockDataFetcher
 
 
+class TestLimitPriceCalculation:
+    """涨跌停价格与封板判断（纯逻辑，不依赖行情接口）"""
+
+    @pytest.mark.parametrize(
+        "pre_close,expected_limit_up,pct",
+        [
+            (5.02, 5.52, 9.96),   # 涨跌幅 <10% 但封在交易所涨停价
+            (10.03, 11.03, 9.97),
+            (18.88, 20.77, 10.01),  # 涨跌幅 >10%
+            (10.00, 11.00, 10.00),
+        ],
+    )
+    def test_limit_up_at_exchange_price(self, pre_close, expected_limit_up, pct):
+        """交易所四舍五入涨停价应被识别为涨停"""
+        limit_up = StockDataFetcher._calc_limit_up_price(pre_close, 0.10)
+        assert limit_up == expected_limit_up
+        assert StockDataFetcher._is_at_limit_up(expected_limit_up, limit_up)
+
+    def test_limit_up_miss_with_old_unrounded_logic(self):
+        """旧逻辑（未舍入）会在 9.98% 附近漏判，新逻辑应命中"""
+        pre_close = 5.02
+        close = 5.52  # 交易所涨停价，涨跌幅约 9.96%
+        raw_limit = pre_close * 1.10  # 5.522
+        assert close < raw_limit - 0.001  # 旧逻辑漏判
+        limit_up = StockDataFetcher._calc_limit_up_price(pre_close, 0.10)
+        assert StockDataFetcher._is_at_limit_up(close, limit_up)
+
+    def test_not_limit_up_when_below_exchange_price(self):
+        """未封涨停价时不应误判"""
+        pre_close = 10.00
+        limit_up = StockDataFetcher._calc_limit_up_price(pre_close, 0.10)
+        assert not StockDataFetcher._is_at_limit_up(10.99, limit_up)
+
+    def test_limit_down_at_exchange_price(self):
+        """跌停价四舍五入后应正确识别"""
+        pre_close = 5.02
+        limit_down = StockDataFetcher._calc_limit_down_price(pre_close, 0.10)
+        assert limit_down == 4.52
+        assert StockDataFetcher._is_at_limit_down(4.52, limit_down)
+
+    @pytest.mark.parametrize(
+        "symbol,stock_name,expected",
+        [
+            ("600519", "", 0.10),
+            ("688001", "", 0.20),
+            ("300750", "", 0.20),
+            ("830799", "", 0.30),
+            ("600519", "ST茅台", 0.05),
+        ],
+    )
+    def test_get_limit_ratio(self, symbol, stock_name, expected):
+        assert StockDataFetcher._get_limit_ratio(symbol, stock_name) == expected
+
+
 class TestStockDataFetcher:
     """数据获取器测试类"""
 

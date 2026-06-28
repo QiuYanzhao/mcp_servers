@@ -192,9 +192,11 @@ StockMarketService
 
 实现位于 `_get_limit_ratio()` 方法中。ST 检测需要调用方传入 `stock_name` 参数。
 
+涨跌停价按交易所规则对 `pre_close × (1 ± ratio)` **四舍五入到分**（`round(..., 2)`），避免涨跌幅显示为 9.98%、9.99% 等时的漏判。
+
 此外，每根日K线还会输出以下涨停状态字段：
-- `is_limit_up`：收盘价是否达到涨停价（`close >= limit_up - 0.001`）
-- `is_limit_down`：收盘价是否达到跌停价（`close <= limit_down + 0.001`）
+- `is_limit_up`：收盘价是否达到涨停价（`close >= limit_up - 0.005`）
+- `is_limit_down`：收盘价是否达到跌停价（`close <= limit_down + 0.005`）
 
 第一条日K线因无 `pre_close`，以上字段均为 `None`。
 

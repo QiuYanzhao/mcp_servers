@@ -116,8 +116,8 @@ class StockMarketService(BaseMCPServer):
                 - pre_close: 昨日收盘价
                 - limit_up: 涨停价
                 - limit_down: 跌停价
-                - is_limit_up: 是否涨停（收盘价 >= 涨停价）
-                - is_limit_down: 是否跌停（收盘价 <= 跌停价）
+                - is_limit_up: 是否涨停（收盘价 >= 四舍五入后的涨停价）
+                - is_limit_down: 是否跌停（收盘价 <= 四舍五入后的跌停价）
             """
             try:
                 symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)

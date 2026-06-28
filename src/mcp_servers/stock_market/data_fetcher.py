@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # 涨跌停计算常量
 DEFAULT_LIMIT_RATIO = 0.10  # 主板涨跌停比例10%（默认）
+LIMIT_PRICE_TOLERANCE = 0.005  # 涨停价比较容差（半分钱，适配价格最小变动单位）
 
 # 默认服务器（通达信服务器）
 DEFAULT_SERVER = "119.147.212.81:7709"
@@ -85,6 +86,26 @@ class StockDataFetcher:
             return 0.30  # 北交所
 
         return DEFAULT_LIMIT_RATIO  # 主板
+
+    @staticmethod
+    def _calc_limit_up_price(pre_close: float, ratio: float) -> float:
+        """计算涨停价（按交易所规则四舍五入到分）"""
+        return round(pre_close * (1 + ratio), 2)
+
+    @staticmethod
+    def _calc_limit_down_price(pre_close: float, ratio: float) -> float:
+        """计算跌停价（按交易所规则四舍五入到分）"""
+        return round(pre_close * (1 - ratio), 2)
+
+    @staticmethod
+    def _is_at_limit_up(close: float, limit_up: float) -> bool:
+        """判断收盘价是否封涨停"""
+        return close >= limit_up - LIMIT_PRICE_TOLERANCE
+
+    @staticmethod
+    def _is_at_limit_down(close: float, limit_down: float) -> bool:
+        """判断收盘价是否封跌停"""
+        return close <= limit_down + LIMIT_PRICE_TOLERANCE
 
     def _get_client(self) -> Quotes:
         """
@@ -219,20 +240,23 @@ class StockDataFetcher:
             # 计算昨日收盘价
             df["pre_close"] = df[close_col].shift(1)
 
-            # 计算涨跌停价格（根据股票代码/名称动态匹配比例）
+            # 计算涨跌停价格（按交易所规则四舍五入到分，再判断封板状态）
             if include_limit:
                 ratio = self._get_limit_ratio(symbol, stock_name)
-                df["limit_up"] = df["pre_close"] * (1 + ratio)
-                df["limit_down"] = df["pre_close"] * (1 - ratio)
-                # 判断是否涨停/跌停（收盘价达到涨跌停价，容差 0.001 避免浮点误差）
+                df["limit_up"] = df["pre_close"].apply(
+                    lambda p: self._calc_limit_up_price(p, ratio) if pd.notna(p) else None
+                )
+                df["limit_down"] = df["pre_close"].apply(
+                    lambda p: self._calc_limit_down_price(p, ratio) if pd.notna(p) else None
+                )
                 df["is_limit_up"] = df.apply(
-                    lambda r: bool(r[close_col] >= r["limit_up"] - 0.001)
+                    lambda r: self._is_at_limit_up(r[close_col], r["limit_up"])
                     if pd.notna(r.get("limit_up"))
                     else False,
                     axis=1,
                 )
                 df["is_limit_down"] = df.apply(
-                    lambda r: bool(r[close_col] <= r["limit_down"] + 0.001)
+                    lambda r: self._is_at_limit_down(r[close_col], r["limit_down"])
                     if pd.notna(r.get("limit_down"))
                     else False,
                     axis=1,

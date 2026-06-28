@@ -14,7 +14,6 @@ EXPECTED_TOOLS = {
     "create_sub_direction",
     "create_theme_stock",
     "update_theme",
-    "update_sub_direction",
     "update_theme_stock",
     "delete_theme_stock",
     "delete_sub_direction",

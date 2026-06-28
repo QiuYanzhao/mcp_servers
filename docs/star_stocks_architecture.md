@@ -10,10 +10,12 @@
 |------|--------|------|
 | 查询 | 3 | 题材列表、主线+轮动树、单题材树 |
 | 新增 | 3 | 题材、细分方向、个股 |
-| 更新 | 3 | 题材角色/摘要、细分评分、个股属性 |
+| 更新 | 2 | 题材角色/摘要；个股属性（备注/类型/辨识度，不含评分） |
 | 删除 | 3 | 个股、细分方向、题材（均支持级联） |
 
-服务版本：**2.0.0**（MCP 名称：`star-stocks`）
+服务版本：**2.1.0**（MCP 名称：`star-stocks`）
+
+> **评分说明**：查询结果仍包含 `score` 字段并按评分排序；MCP 与 Web/API **不提供**手动设置或更新评分的接口。评分数据主要来自 Markdown 导入及细分方向下个股均分重算。
 
 ### 技术栈
 
@@ -33,7 +35,7 @@ mcpServers/
     ├── base.py                      # MCP 服务器基类
     └── star_stocks/
         ├── main.py                  # 进程入口
-        ├── service.py               # MCP 工具注册（12 个 tool）
+        ├── service.py               # MCP 工具注册（11 个 tool）
         ├── config.py                # .env 加载、项目根路径
         ├── db.py                    # 数据库 Session 上下文
         └── helpers.py               # ok / err JSON 序列化
@@ -63,7 +65,7 @@ MCP 服务定义类：
 
 ```
 StarStocksService
-├── register_tools()    # 注册 12 个 MCP tool
+├── register_tools()    # 注册 11 个 MCP tool
 └── run()               # 启动服务
 ```
 
@@ -346,9 +348,8 @@ McpQueryService
 |------|------|------|--------|------|
 | `theme_id` | int | 是 | — | 所属题材 ID |
 | `name` | str | 是 | — | 细分名称，最长 128 字符，同题材内唯一 |
-| `score` | int \| null | 否 | `null` | 评分 0–100 |
 
-**返回：** `SubDirectionOut`
+**返回：** `SubDirectionOut`（`score` 为只读，新建时通常为 `null`）
 
 ---
 
@@ -367,14 +368,13 @@ McpQueryService
 | `sub_direction_id` | int \| null | 否 | `null` | 挂细分方向（与 `theme_id` 二选一） |
 | `is_distinctive` | bool | 否 | `false` | 是否最具辨识度 |
 | `remark` | str \| null | 否 | `null` | 备注 |
-| `score` | int \| null | 否 | `null` | 评分 0–100 |
 
 **约束：**
 
 - `theme_id` 与 `sub_direction_id` 必须**恰好一个**非空
 - 同一题材或同一细分下 `code` 不可重复
 
-**返回：** `ThemeStockOut`
+**返回：** `ThemeStockOut`（`score` 为只读，新建时通常为 `null`）
 
 ---
 
@@ -396,24 +396,9 @@ McpQueryService
 
 ---
 
-#### 5.3.2 update_sub_direction
+#### 5.3.2 update_theme_stock
 
-更新细分方向；**仅允许**修改评分。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `sub_direction_id` | int | 是 | 细分方向 ID |
-| `score` | int \| null | 是 | 新评分 0–100（必填） |
-
-**返回：** `SubDirectionOut`
-
----
-
-#### 5.3.3 update_theme_stock
-
-更新个股条目；**仅允许**修改评分、备注、类型、辨识度。
+更新个股条目；**仅允许**修改备注、类型、是否最具辨识度（**不可修改评分**）。
 
 **参数：**
 
@@ -423,11 +408,10 @@ McpQueryService
 | `stock_type` | StockType \| null | 否 | 个股类型 |
 | `is_distinctive` | bool \| null | 否 | 是否最具辨识度 |
 | `remark` | str \| null | 否 | 备注 |
-| `score` | int \| null | 否 | 评分 0–100 |
 
 至少提供一个可更新字段（除 `entry_id` 外）。
 
-**返回：** `ThemeStockOut`
+**返回：** `ThemeStockOut`（`score` 为只读）
 
 ---
 
@@ -513,6 +497,17 @@ McpQueryService
 **查询类** tool → `McpQueryService` → 批量 SELECT + 内存排序组装  
 **写操作** tool → `ThemeService` / `SubDirectionService` / `ThemeStockService` → 事务提交
 
+### 6.1 与 star_stocks Web/API 的评分约定
+
+| 能力 | MCP | REST API（`/api/v1`） |
+|------|-----|------------------------|
+| 查询 `score` | ✅ 只读 | ✅ 只读（展示/排序） |
+| 新增时写入 `score` | ❌ | ❌（`SubDirectionCreate` / `ThemeStockCreate` 无 score 字段） |
+| PATCH 更新 `score` | ❌（无 `update_sub_direction`） | ❌（`SubDirectionPatch` / `ThemeStockPatch` 无 score 字段） |
+| Markdown 导入写入 `score` | ❌ MCP 无此 tool | ✅ `ImportService`（Web 导入入口） |
+
+细分方向 `score` 仍可在导入后由「下属个股均分」脚本或 `SubDirectionService.recalculate_score` 自动回写，但**不能**通过 MCP 或日常 CRUD API 手工改分。
+
 ## 7. 排序规则汇总
 
 | 场景 | 排序键 |
@@ -579,8 +574,7 @@ uv pip install -e ".[dev]"
 | 5 | `create_sub_direction` | 新增 |
 | 6 | `create_theme_stock` | 新增 |
 | 7 | `update_theme` | 更新 |
-| 8 | `update_sub_direction` | 更新 |
-| 9 | `update_theme_stock` | 更新 |
-| 10 | `delete_theme_stock` | 删除 |
-| 11 | `delete_sub_direction` | 删除 |
-| 12 | `delete_theme` | 删除 |
+| 8 | `update_theme_stock` | 更新 |
+| 9 | `delete_theme_stock` | 删除 |
+| 10 | `delete_sub_direction` | 删除 |
+| 11 | `delete_theme` | 删除 |
