@@ -141,15 +141,16 @@ class StockDataFetcher:
             self._client = None
             logger.info("关闭mootdx行情客户端")
 
-    def get_minute_data(self, symbol: str, count: int = 240, adaptive_threshold: Optional[float] = None) -> Dict:
+    def get_minute_data(self, symbol: str, count: int = 240, adaptive_threshold: float = 1.0) -> Dict:
         """
         获取1分钟K线数据
 
         Args:
             symbol: 股票代码，如 "600519"
             count: 获取的数据条数，默认240（约1个交易日）
-            adaptive_threshold: 自适应提取阈值(如 1.0 表示 1%)。
+            adaptive_threshold: 自适应提取阈值(如 1.0 表示 1%)，默认 1.0。
                                如果设置此参数，将只返回满足条件的关键特征点。
+                               设置为 0 或 None 可返回完整数据。
 
         Returns:
             包含1分钟K线数据的字典

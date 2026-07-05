@@ -83,7 +83,7 @@ StockMarketService
 - `stock_code` (str): 股票代码，如 "600519"
 - `stock_name` (str): 股票名称（可选）
 - `count` (int): 数据条数，默认240
-- `adaptive_threshold` (float): 自适应提取阈值，如 1.0 表示 1%。设置后将只返回关键特征点。
+- `adaptive_threshold` (float): 自适应提取阈值，默认 1.0 (即 1%)。设置为 0 或 None 可返回完整数据。
 
 **返回字段：**
 ```json
