@@ -283,3 +283,5 @@ pip install mootdx --no-deps
   - `close`: 收盘基准点
 - `base_price`: 触发该记录时的基准价格
 - `change_pct_from_base`: 当前价格相对于基准价格的涨跌幅
+- `is_limit_up` (bool): 是否触及涨停价（仅在 `new_high` 类型时计算）
+- `is_limit_down` (bool): 是否触及跌停价（仅在 `new_low` 类型时计算）

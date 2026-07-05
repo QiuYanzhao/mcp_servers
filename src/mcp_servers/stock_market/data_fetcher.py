@@ -141,7 +141,7 @@ class StockDataFetcher:
             self._client = None
             logger.info("关闭mootdx行情客户端")
 
-    def get_minute_data(self, symbol: str, count: int = 240, adaptive_threshold: float = 1.0) -> Dict:
+    def get_minute_data(self, symbol: str, count: int = 240, adaptive_threshold: float = 1.0, stock_name: str = "") -> Dict:
         """
         获取1分钟K线数据
 
@@ -151,6 +151,7 @@ class StockDataFetcher:
             adaptive_threshold: 自适应提取阈值(如 1.0 表示 1%)，默认 1.0。
                                如果设置此参数，将只返回满足条件的关键特征点。
                                设置为 0 或 None 可返回完整数据。
+            stock_name: 股票名称，用于辅助判断涨跌停（ST股）
 
         Returns:
             包含1分钟K线数据的字典
@@ -187,7 +188,28 @@ class StockDataFetcher:
             # 如果设置了自适应阈值，则提取关键特征点
             if adaptive_threshold is not None:
                 logger.info(f"对{symbol}应用自适应提取，阈值: {adaptive_threshold}%")
-                data_list = self.extract_adaptive_kline(data_list, adaptive_threshold)
+                
+                # 获取昨收以便判断涨跌停
+                pre_close = 0.0
+                try:
+                    daily_data = self.get_daily_kline(symbol, count=2, include_ma=False, include_limit=False)
+                    if daily_data and not daily_data.get("error") and daily_data.get("data"):
+                        # 取最后一条日线的收盘价作为 pre_close (实际上是今天的收盘价，如果今天已收盘)
+                        # 如果要准确获取昨收，通常需要取倒数第二条，或者使用 get_realtime_quote 的 last_close
+                        # 但考虑到分时数据通常是当天的，这里我们使用前一天的收盘价
+                        # 如果 daily_data 有2条，取倒数第二条的 close
+                        if len(daily_data["data"]) >= 2:
+                            pre_close = daily_data["data"][-2]["close"]
+                        elif len(daily_data["data"]) == 1:
+                            # 只有今天的数据，无法确定昨收，尝试用开盘价近似或忽略
+                            # 这里我们尝试用 get_realtime_quote 获取 last_close
+                            quote = self.get_realtime_quote(symbol)
+                            if quote and not quote.get("error"):
+                                pre_close = quote.get("last_close", 0.0)
+                except Exception as e:
+                    logger.warning(f"获取昨收数据失败，涨跌停判断可能不准确: {e}")
+
+                data_list = self.extract_adaptive_kline(data_list, adaptive_threshold, pre_close, stock_name)
                 return {
                     "symbol": symbol,
                     "frequency": "adaptive_1min",
@@ -391,19 +413,29 @@ class StockDataFetcher:
             logger.warning(f"{symbol}前复权处理失败，返回原始数据: {e}")
             return df
 
-    def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0) -> List[Dict]:
+    def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0, pre_close: float = 0.0, stock_name: str = "") -> List[Dict]:
         """
         提取自适应 K线数据 (1% 波动 + 极值提取)
         
         Args:
             data_list: 1分钟 K线数据列表
             threshold_pct: 触发阈值百分比，默认 1.0%
+            pre_close: 前收盘价，用于计算涨跌停
+            stock_name: 股票名称，用于判断ST股
             
         Returns:
             提取后的关键特征点列表
         """
         if not data_list:
             return []
+
+        # 计算涨跌停价格
+        limit_up_price = 0.0
+        limit_down_price = 0.0
+        if pre_close > 0:
+            ratio = self._get_limit_ratio(data_list[0].get('symbol', ''), stock_name)
+            limit_up_price = self._calc_limit_up_price(pre_close, ratio)
+            limit_down_price = self._calc_limit_down_price(pre_close, ratio)
 
         result = []
         
@@ -451,12 +483,21 @@ class StockDataFetcher:
                 record_type = "new_low"
 
             if should_record:
-                result.append({
+                new_record = {
                     **item, 
                     "type": record_type, 
                     "change_pct_from_base": round(change_pct, 2),
                     "base_price": current_base_price
-                })
+                }
+                
+                # 如果是新高或新低，判断是否涨停跌停
+                if pre_close > 0:
+                    if record_type == "new_high":
+                        new_record["is_limit_up"] = self._is_at_limit_up(item['high'], limit_up_price)
+                    elif record_type == "new_low":
+                        new_record["is_limit_down"] = self._is_at_limit_down(item['low'], limit_down_price)
+                
+                result.append(new_record)
                 # 更新基准价格
                 current_base_price = price
 

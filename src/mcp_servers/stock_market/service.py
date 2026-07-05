@@ -75,7 +75,7 @@ class StockMarketService(BaseMCPServer):
             try:
                 symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
                 logger.info(f"获取1分钟K线数据: {symbol}, 数量: {count}, 阈值: {adaptive_threshold}")
-                result = self._data_fetcher.get_minute_data(symbol, count, adaptive_threshold)
+                result = self._data_fetcher.get_minute_data(symbol, count, adaptive_threshold, stock_name)
                 return json.dumps(result, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"获取1分钟K线数据失败: {e}")
