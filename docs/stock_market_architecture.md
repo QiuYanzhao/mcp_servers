@@ -77,11 +77,13 @@ StockMarketService
 
 ### 4.1 get_minute_kline
 
-获取1分钟K线数据，用于分析单日K线形状和量能。
+获取1分钟K线数据，用于分析单日K线形状和量能。支持自适应提取以减少数据量。
 
 **参数：**
 - `stock_code` (str): 股票代码，如 "600519"
+- `stock_name` (str): 股票名称（可选）
 - `count` (int): 数据条数，默认240
+- `adaptive_threshold` (float): 自适应提取阈值，如 1.0 表示 1%。设置后将只返回关键特征点。
 
 **返回字段：**
 ```json
@@ -98,6 +100,40 @@ StockMarketService
             "close": 1802.0,
             "volume": 1500,
             "amount": 2700000.0
+        }
+    ]
+}
+```
+
+**自适应模式返回字段（当设置 adaptive_threshold 时）：**
+```json
+{
+    "symbol": "600519",
+    "frequency": "adaptive_1min",
+    "count": 15,
+    "data": [
+        {
+            "datetime": "2026-06-03 09:30",
+            "open": 1800.0,
+            "high": 1800.0,
+            "low": 1800.0,
+            "close": 1800.0,
+            "volume": 500,
+            "amount": 900000.0,
+            "type": "open",
+            "base_price": 1800.0
+        },
+        {
+            "datetime": "2026-06-03 09:35",
+            "open": 1810.0,
+            "high": 1818.0,
+            "low": 1810.0,
+            "close": 1818.0,
+            "volume": 2000,
+            "amount": 3636000.0,
+            "type": "trigger_pct",
+            "change_pct_from_base": 1.0,
+            "base_price": 1800.0
         }
     ]
 }
@@ -224,3 +260,26 @@ StockMarketService
 ```bash
 pip install mootdx --no-deps
 ```
+
+## 9. 自适应K线提取 (Adaptive K-line Extraction)
+
+为了减少 LLM 上下文占用，系统提供了一种基于 1% 波动阈值的自适应提取算法。
+
+### 9.1 提取规则
+
+1.  **基准初始化**：记录早盘第一条数据的开盘价作为初始基准。
+2.  **波动触发**：如果后续分时价格相对于基准价格的涨跌幅绝对值 $\ge$ 阈值（默认 1%），则记录该点，并将该点价格更新为**新基准**。
+3.  **极值触发**：如果后续分时价格是截止目前出现的**全局最高价**或**全局最低价**，即使波动不足 1%，也记录该点并更新基准。
+4.  **收盘保护**：确保最后一条数据（收盘价）一定被记录。
+
+### 9.2 输出字段说明
+
+在自适应模式下，每条数据会额外包含以下字段：
+- `type`: 触发类型
+  - `open`: 开盘基准点
+  - `trigger_pct`: 价格波动超过阈值
+  - `new_high`: 创截止目前新高
+  - `new_low`: 创截止目前新低
+  - `close`: 收盘基准点
+- `base_price`: 触发该记录时的基准价格
+- `change_pct_from_base`: 当前价格相对于基准价格的涨跌幅

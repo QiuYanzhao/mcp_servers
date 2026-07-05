@@ -141,13 +141,15 @@ class StockDataFetcher:
             self._client = None
             logger.info("关闭mootdx行情客户端")
 
-    def get_minute_data(self, symbol: str, count: int = 240) -> Dict:
+    def get_minute_data(self, symbol: str, count: int = 240, adaptive_threshold: Optional[float] = None) -> Dict:
         """
         获取1分钟K线数据
 
         Args:
             symbol: 股票代码，如 "600519"
             count: 获取的数据条数，默认240（约1个交易日）
+            adaptive_threshold: 自适应提取阈值(如 1.0 表示 1%)。
+                               如果设置此参数，将只返回满足条件的关键特征点。
 
         Returns:
             包含1分钟K线数据的字典
@@ -180,6 +182,17 @@ class StockDataFetcher:
                         "amount": round(float(row.get("amount", 0)), 2),
                     }
                 )
+
+            # 如果设置了自适应阈值，则提取关键特征点
+            if adaptive_threshold is not None:
+                logger.info(f"对{symbol}应用自适应提取，阈值: {adaptive_threshold}%")
+                data_list = self.extract_adaptive_kline(data_list, adaptive_threshold)
+                return {
+                    "symbol": symbol,
+                    "frequency": "adaptive_1min",
+                    "count": len(data_list),
+                    "data": data_list,
+                }
 
             return {
                 "symbol": symbol,
@@ -376,6 +389,88 @@ class StockDataFetcher:
         except Exception as e:
             logger.warning(f"{symbol}前复权处理失败，返回原始数据: {e}")
             return df
+
+    def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0) -> List[Dict]:
+        """
+        提取自适应 K线数据 (1% 波动 + 极值提取)
+        
+        Args:
+            data_list: 1分钟 K线数据列表
+            threshold_pct: 触发阈值百分比，默认 1.0%
+            
+        Returns:
+            提取后的关键特征点列表
+        """
+        if not data_list:
+            return []
+
+        result = []
+        
+        # 1. 记录开盘价作为初始基准
+        start_item = data_list[0]
+        current_base_price = start_item['open']
+        result.append({**start_item, "type": "open", "base_price": current_base_price})
+        
+        # 初始化极值跟踪
+        max_price_so_far = start_item['high']
+        min_price_so_far = start_item['low']
+
+        # 2. 遍历后续数据
+        for i in range(1, len(data_list)):
+            item = data_list[i]
+            price = item['close']
+            
+            # 检查是否为新的极值
+            is_new_high = item['high'] > max_price_so_far
+            is_new_low = item['low'] < min_price_so_far
+            
+            # 更新极值记录
+            if is_new_high: max_price_so_far = item['high']
+            if is_new_low: min_price_so_far = item['low']
+
+            # 计算相对于基准的涨跌幅
+            change_pct = (price - current_base_price) / current_base_price * 100 if current_base_price != 0 else 0
+            
+            should_record = False
+            record_type = ""
+
+            # 规则 A: 价格波动超过阈值
+            if abs(change_pct) >= threshold_pct:
+                should_record = True
+                record_type = "trigger_pct"
+            
+            # 规则 B: 创截止目前的新高
+            elif is_new_high:
+                should_record = True
+                record_type = "new_high"
+            
+            # 规则 C: 创截止目前的新低
+            elif is_new_low:
+                should_record = True
+                record_type = "new_low"
+
+            if should_record:
+                result.append({
+                    **item, 
+                    "type": record_type, 
+                    "change_pct_from_base": round(change_pct, 2),
+                    "base_price": current_base_price
+                })
+                # 更新基准价格
+                current_base_price = price
+
+        # 3. 确保最后一条（收盘价）被记录
+        last_item = data_list[-1]
+        if result[-1]['datetime'] != last_item['datetime']:
+            change_pct = (last_item['close'] - current_base_price) / current_base_price * 100 if current_base_price != 0 else 0
+            result.append({
+                **last_item, 
+                "type": "close", 
+                "change_pct_from_base": round(change_pct, 2),
+                "base_price": current_base_price
+            })
+
+        return result
 
     def get_realtime_quote(self, symbol: str) -> Dict:
         """

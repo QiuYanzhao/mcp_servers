@@ -41,7 +41,7 @@ class StockMarketService(BaseMCPServer):
         """注册工具方法"""
 
         @self.mcp.tool()
-        def get_minute_kline(stock_code: str = "", stock_name: str = "", count: int = 240) -> str:
+        def get_minute_kline(stock_code: str = "", stock_name: str = "", count: int = 240, adaptive_threshold: float = None) -> str:
             """
             获取1分钟K线数据
 
@@ -53,6 +53,8 @@ class StockMarketService(BaseMCPServer):
                 stock_code: 股票代码，如 "600519"（可选，与 stock_name 二选一）
                 stock_name: 股票名称，如 "贵州茅台"（可选，stock_code 为空时使用）
                 count: 获取的数据条数，默认240（约1个交易日）
+                adaptive_threshold: 自适应提取阈值(如 1.0 表示 1%)。
+                                   如果设置此参数，将只返回满足条件的关键特征点，大幅减少数据量。
 
             Returns:
                 包含1分钟K线数据的JSON字符串，字段包括：
@@ -63,11 +65,16 @@ class StockMarketService(BaseMCPServer):
                 - close: 收盘价
                 - volume: 成交量
                 - amount: 成交额
+                
+                如果设置了 adaptive_threshold，还会包含以下字段：
+                - type: 触发类型 (open/trigger_pct/new_high/new_low/close)
+                - base_price: 触发时的基准价格
+                - change_pct_from_base: 相对于基准价格的涨跌幅
             """
             try:
                 symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
-                logger.info(f"获取1分钟K线数据: {symbol}, 数量: {count}")
-                result = self._data_fetcher.get_minute_data(symbol, count)
+                logger.info(f"获取1分钟K线数据: {symbol}, 数量: {count}, 阈值: {adaptive_threshold}")
+                result = self._data_fetcher.get_minute_data(symbol, count, adaptive_threshold)
                 return json.dumps(result, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"获取1分钟K线数据失败: {e}")
