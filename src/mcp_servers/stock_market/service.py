@@ -5,6 +5,7 @@ A股行情数据MCP服务
 - 1分钟K线数据（单日K线形状、量能）
 - 日K数据（含5/10/20日均线、涨跌停、流通市值）
 - 前复权处理
+- 服务器自动探测和故障转移
 """
 
 import json
@@ -12,6 +13,7 @@ import logging
 
 from ..base import BaseMCPServer
 from .data_fetcher import StockDataFetcher
+from .server_manager import get_server_manager
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -22,12 +24,23 @@ class StockMarketService(BaseMCPServer):
     A股行情数据MCP服务
 
     提供A股市场数据获取功能，基于mootdx实现。
+    支持服务器自动探测和故障转移。
     """
 
     def __init__(self):
         """初始化A股行情数据服务"""
         super().__init__("stock-market-service", "1.0.0")
-        self._data_fetcher = StockDataFetcher()
+
+        # 启动服务器管理器，自动探测可用服务器
+        logger.info("正在启动服务器管理器...")
+        server_manager = get_server_manager()
+        if server_manager.start():
+            logger.info("服务器管理器启动成功，可用服务器: %d 台", server_manager.get_server_count())
+        else:
+            logger.warning("服务器管理器启动后未找到可用服务器，将使用备用服务器列表")
+
+        # 初始化数据获取器（使用服务器管理器模式）
+        self._data_fetcher = StockDataFetcher(use_server_manager=True)
         self.register_tools()
         self.register_resources()
         logger.info("A股行情数据服务初始化完成")
