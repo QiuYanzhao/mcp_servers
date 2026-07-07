@@ -10,6 +10,7 @@ A股行情数据MCP服务
 
 import json
 import logging
+import threading
 
 from ..base import BaseMCPServer
 from .data_fetcher import StockDataFetcher
@@ -31,13 +32,9 @@ class StockMarketService(BaseMCPServer):
         """初始化A股行情数据服务"""
         super().__init__("stock-market-service", "1.0.0")
 
-        # 启动服务器管理器，自动探测可用服务器
-        logger.info("正在启动服务器管理器...")
-        server_manager = get_server_manager()
-        if server_manager.start():
-            logger.info("服务器管理器启动成功，可用服务器: %d 台", server_manager.get_server_count())
-        else:
-            logger.warning("服务器管理器启动后未找到可用服务器，将使用备用服务器列表")
+        # 获取服务器管理器（仅创建实例，不阻塞探测）
+        logger.info("正在初始化服务器管理器...")
+        self._server_manager = get_server_manager()
 
         # 初始化数据获取器（使用服务器管理器模式）
         self._data_fetcher = StockDataFetcher(use_server_manager=True)
@@ -45,10 +42,24 @@ class StockMarketService(BaseMCPServer):
         self.register_resources()
         logger.info("A股行情数据服务初始化完成")
 
+        # 后台线程执行服务器探测，不阻塞 MCP stdio 启动
+        probe_thread = threading.Thread(target=self._probe_servers, daemon=True)
+        probe_thread.start()
+
     def __del__(self):
         """析构函数，关闭连接"""
         if hasattr(self, "_data_fetcher"):
             self._data_fetcher.close()
+
+    def _probe_servers(self):
+        """后台执行服务器探测"""
+        try:
+            if self._server_manager.start():
+                logger.info("服务器探测完成，可用服务器: %d 台", self._server_manager.get_server_count())
+            else:
+                logger.warning("服务器探测未找到可用服务器，将使用备用服务器列表")
+        except Exception as e:
+            logger.error("服务器探测异常: %s", e)
 
     def register_tools(self):
         """注册工具方法"""
