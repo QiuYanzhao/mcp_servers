@@ -161,7 +161,13 @@ class StockDataFetcher:
         server = manager.get_current_server()
 
         if server is None:
-            raise ConnectionError("服务器管理器中没有可用服务器，请先执行服务器探测")
+            # 服务启动探测在线程中执行，请求抢先到达时同步完成缓存解析。
+            logger.info("服务器列表尚未初始化，立即解析缓存服务器")
+            if not manager.resolve():
+                raise ConnectionError("未找到可用通达信服务器")
+            server = manager.get_current_server()
+            if server is None:
+                raise ConnectionError("未找到可用通达信服务器")
 
         host, port = server
         try:
@@ -298,10 +304,23 @@ class StockDataFetcher:
                     e,
                 )
 
-                # 如果启用了服务器管理器，尝试切换服务器
+                # 缓存首选服务器实际取数失败后，才执行全量探测并更新缓存。
                 if self._use_server_manager and attempt < MAX_RETRY_COUNT - 1:
-                    logger.info("尝试切换到下一个服务器...")
-                    self._client = None  # 强制重新连接
+                    manager = get_server_manager()
+                    if manager.should_refresh_on_failure():
+                        if not manager.refresh_on_failure():
+                            raise
+                    else:
+                        manager.switch_to_next_server()
+
+                    # 关闭失败连接，下一次尝试会连接刷新后列表的当前服务器。
+                    if self._client is not None:
+                        try:
+                            self._client.close()
+                        except Exception as close_error:
+                            logger.debug("关闭失败连接异常: %s", close_error)
+                    self._client = None
+                    self._current_server = None
                     continue
 
                 # 如果是最后一次尝试或未启用服务器管理器，抛出异常
@@ -334,7 +353,7 @@ class StockDataFetcher:
 
             if df is None or df.empty:
                 logger.warning("未获取到%s的1分钟K线数据", symbol)
-                return {"error": "未获取到数据", "data": []}
+                raise ConnectionError("未获取到1分钟K线数据")
 
             # 前复权处理
             df = self._apply_qfq(client, symbol, df)
@@ -427,7 +446,7 @@ class StockDataFetcher:
 
             if df is None or df.empty:
                 logger.warning("未获取到%s的日K线数据", symbol)
-                return {"error": "未获取到数据", "data": []}
+                raise ConnectionError("未获取到日K线数据")
 
             # 前复权处理
             df = self._apply_qfq(client, symbol, df)
@@ -705,7 +724,7 @@ class StockDataFetcher:
             df = client.quotes(symbol=symbol)
 
             if df is None or df.empty:
-                return {"error": "未获取到数据"}
+                raise ConnectionError("未获取到实时行情数据")
 
             row = df.iloc[0]
 
