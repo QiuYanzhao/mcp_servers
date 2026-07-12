@@ -16,7 +16,12 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from mootdx.quotes import Quotes
 
-from .server_manager import TdxServerManager, get_server_manager
+from .server_manager import (
+    PROBE_EMPTY_ERROR,
+    TdxServerManager,
+    TdxServersUnavailableError,
+    get_server_manager,
+)
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -164,10 +169,10 @@ class StockDataFetcher:
             # 服务启动探测在线程中执行，请求抢先到达时同步完成缓存解析。
             logger.info("服务器列表尚未初始化，立即解析缓存服务器")
             if not manager.resolve():
-                raise ConnectionError("未找到可用通达信服务器")
+                raise TdxServersUnavailableError(PROBE_EMPTY_ERROR)
             server = manager.get_current_server()
             if server is None:
-                raise ConnectionError("未找到可用通达信服务器")
+                raise TdxServersUnavailableError(PROBE_EMPTY_ERROR)
 
         host, port = server
         try:
@@ -308,10 +313,12 @@ class StockDataFetcher:
                 if self._use_server_manager and attempt < MAX_RETRY_COUNT - 1:
                     manager = get_server_manager()
                     if manager.should_refresh_on_failure():
-                        if not manager.refresh_on_failure():
-                            raise
-                    else:
-                        manager.switch_to_next_server()
+                        # 并发探测结果为空时立即抛错，不再继续重试。
+                        manager.refresh_on_failure()
+                    elif manager.switch_to_next_server() is None:
+                        raise TdxServersUnavailableError(
+                            "已无可用通达信服务器可切换"
+                        )
 
                     # 关闭失败连接，下一次尝试会连接刷新后列表的当前服务器。
                     if self._client is not None:
@@ -323,9 +330,7 @@ class StockDataFetcher:
                     self._current_server = None
                     continue
 
-                # 如果是最后一次尝试或未启用服务器管理器，抛出异常
-                if attempt == MAX_RETRY_COUNT - 1:
-                    raise
+                raise
 
         raise last_error
 

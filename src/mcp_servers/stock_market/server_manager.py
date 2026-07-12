@@ -27,6 +27,13 @@ DEFAULT_MAX_WORKERS = 20  # 并发探测线程数
 
 ServerSource = Literal["cache", "probe", ""]
 
+# 并发探测后仍无可用服务器时抛出，供 MCP 工具快速返回失败。
+PROBE_EMPTY_ERROR = "并发探测后未找到可用通达信服务器"
+
+
+class TdxServersUnavailableError(ConnectionError):
+    """通达信服务器不可用（含并发探测结果为空）。"""
+
 
 class TdxServerManager:
     """
@@ -187,12 +194,16 @@ class TdxServerManager:
                     return True
 
                 logger.error("失败刷新后仍未找到可用服务器，耗时 %.2f 秒", elapsed)
-                return False
+                raise TdxServersUnavailableError(PROBE_EMPTY_ERROR)
 
+            except TdxServersUnavailableError:
+                raise
             except Exception as e:
                 elapsed = time.time() - start_time
                 logger.error("失败刷新探测异常: %s，耗时 %.2f 秒", e, elapsed)
-                return False
+                raise TdxServersUnavailableError(
+                    f"缓存服务器取数失败后并发探测异常: {e}"
+                ) from e
 
     def should_refresh_on_failure(self) -> bool:
         """当前是否应在取数失败时触发全量探测（仅缓存首选且尚未刷新过）。"""
