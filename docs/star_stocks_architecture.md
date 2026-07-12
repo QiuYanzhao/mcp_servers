@@ -36,12 +36,12 @@ mcpServers/
     └── star_stocks/
         ├── main.py                  # 进程入口
         ├── service.py               # MCP 工具注册（11 个 tool）
-        ├── config.py                # .env 加载、项目根路径
-        ├── db.py                    # 数据库 Session 上下文
         └── helpers.py               # ok / err JSON 序列化
 
 star_stocks/                         # 业务项目（同级目录）
 └── src/star_stocks/
+    ├── config.py                    # .env 加载、项目根路径
+    ├── database.py                  # 数据库 Session（含 db_session 上下文）
     ├── models/                      # ORM：theme_direction, sub_direction, theme_stock
     ├── schemas/                     # Pydantic 入参/出参
     └── services/

@@ -7,15 +7,9 @@
 import logging
 from typing import Literal
 
-from ..base import BaseMCPServer
-from .config import init_star_stocks_env
-from .db import db_session
-from .helpers import err, ok
-
-init_star_stocks_env()
-
-from star_stocks.models import ThemeStock  # noqa: E402
-from star_stocks.schemas import (  # noqa: E402
+from star_stocks.database import db_session
+from star_stocks.models import ThemeStock
+from star_stocks.schemas import (
     SubDirectionCreate,
     SubDirectionOut,
     ThemeCreate,
@@ -27,12 +21,15 @@ from star_stocks.schemas import (  # noqa: E402
     ThemeStockPatch,
     ThemeUpdate,
 )
-from star_stocks.services.mcp_query import McpQueryService  # noqa: E402
-from star_stocks.services import (  # noqa: E402
+from star_stocks.services.mcp_query import McpQueryService
+from star_stocks.services import (
     SubDirectionService,
     ThemeService,
     ThemeStockService,
 )
+
+from ..base import BaseMCPServer
+from .helpers import err, ok
 
 logger = logging.getLogger(__name__)
 

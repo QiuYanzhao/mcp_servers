@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 
+from star_stocks.database import db_session
 from star_stocks.external.kaipanhong import normalize_stock_code
 from star_stocks.services.stock_info import StockInfoService
-
-from src.mcp_servers.star_stocks.db import db_session
 
 logger = logging.getLogger(__name__)
 

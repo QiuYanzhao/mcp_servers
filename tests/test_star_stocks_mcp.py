@@ -3,7 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.mcp_servers.star_stocks.config import get_star_stocks_root, init_star_stocks_env
 from src.mcp_servers.star_stocks.service import StarStocksService
 
 EXPECTED_TOOLS = {
@@ -19,18 +18,6 @@ EXPECTED_TOOLS = {
     "delete_sub_direction",
     "delete_theme",
 }
-
-
-class TestStarStocksConfig:
-    def test_get_star_stocks_root(self):
-        root = get_star_stocks_root()
-        assert root.name == "star_stocks"
-        assert (root / "pyproject.toml").exists()
-
-    def test_init_star_stocks_env(self, monkeypatch):
-        root = get_star_stocks_root()
-        monkeypatch.chdir(root)
-        init_star_stocks_env()
 
 
 class TestStarStocksService:

@@ -59,11 +59,9 @@ src/mcp_servers/
 │   ├── logger.py              #   日志配置
 │   ├── service.py             #   服务层（MCP 工具注册、数据格式化）
 │   └── main.py                #   启动入口
-└── star_stocks/               # 题材个股管理服务
-    ├── config.py              #   环境变量初始化
-    ├── db.py                  #   数据库会话管理
+└── star_stocks/               # 题材个股管理服务（仅 MCP 工具注册）
     ├── helpers.py             #   通用工具函数
-    ├── service.py             #   服务层（MCP 工具注册、CRUD 操作）
+    ├── service.py             #   MCP 工具注册
     └── main.py                #   启动入口
 ```
 
