@@ -397,7 +397,7 @@ class StockDataFetcher:
                 except Exception as e:
                     logger.warning("获取昨收数据失败，涨跌停判断可能不准确: %s", e)
 
-                data_list = self.extract_adaptive_kline(data_list, adaptive_threshold, pre_close, stock_name)
+                data_list = self.extract_adaptive_kline(data_list, adaptive_threshold, pre_close, stock_name, symbol)
                 return {
                     "symbol": symbol,
                     "frequency": "adaptive_1min",
@@ -611,7 +611,7 @@ class StockDataFetcher:
             logger.warning(f"{symbol}前复权处理失败，返回原始数据: {e}")
             return df
 
-    def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0, pre_close: float = 0.0, stock_name: str = "") -> List[Dict]:
+    def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0, pre_close: float = 0.0, stock_name: str = "", symbol: str = "") -> List[Dict]:
         """
         提取自适应 K线数据 (1% 波动 + 极值提取)
         
@@ -620,6 +620,7 @@ class StockDataFetcher:
             threshold_pct: 触发阈值百分比，默认 1.0%
             pre_close: 前收盘价，用于计算涨跌停
             stock_name: 股票名称，用于判断ST股
+            symbol: 股票代码，用于计算涨跌停比例（如 300xxx 为创业板 20%）
             
         Returns:
             提取后的关键特征点列表
@@ -631,9 +632,11 @@ class StockDataFetcher:
         limit_up_price = 0.0
         limit_down_price = 0.0
         if pre_close > 0:
-            ratio = self._get_limit_ratio(data_list[0].get('symbol', ''), stock_name)
+            # 使用传入的 symbol 计算涨跌停比例，而非从 data_list 中获取（data_list 中没有 symbol 字段）
+            ratio = self._get_limit_ratio(symbol, stock_name)
             limit_up_price = self._calc_limit_up_price(pre_close, ratio)
             limit_down_price = self._calc_limit_down_price(pre_close, ratio)
+            logger.info("涨跌停计算: symbol=%s, ratio=%.2f, 涨停=%.2f, 跌停=%.2f", symbol, ratio, limit_up_price, limit_down_price)
 
         result = []
         
