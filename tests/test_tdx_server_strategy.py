@@ -4,15 +4,15 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from src.mcp_servers.stock_market.data_fetcher import StockDataFetcher
-from src.mcp_servers.stock_market.server_manager import (
+from mcp_servers.stock_market.data_fetcher import StockDataFetcher
+from mcp_servers.stock_market.server_manager import (
     PROBE_EMPTY_ERROR,
     TdxServerManager,
     TdxServersUnavailableError,
 )
 
 
-@patch("src.mcp_servers.stock_market.server_manager.resolve_tdx_servers")
+@patch("mcp_servers.stock_market.server_manager.resolve_tdx_servers")
 def test_manager_uses_cached_primary_without_probe(mock_resolve):
     """启动时应直接采用 resolve 返回的缓存首选服务器。"""
     mock_resolve.return_value = SimpleNamespace(
@@ -27,8 +27,8 @@ def test_manager_uses_cached_primary_without_probe(mock_resolve):
     assert manager.should_refresh_on_failure()
 
 
-@patch("src.mcp_servers.stock_market.server_manager.probe_and_refresh_tdx_servers")
-@patch("src.mcp_servers.stock_market.server_manager.resolve_tdx_servers")
+@patch("mcp_servers.stock_market.server_manager.probe_and_refresh_tdx_servers")
+@patch("mcp_servers.stock_market.server_manager.resolve_tdx_servers")
 def test_manager_refreshes_cache_after_actual_failure(mock_resolve, mock_refresh):
     """缓存服务器实际取数失败后应探测并切换到新的首选服务器。"""
     mock_resolve.return_value = SimpleNamespace(
@@ -49,8 +49,8 @@ def test_manager_refreshes_cache_after_actual_failure(mock_resolve, mock_refresh
     mock_refresh.assert_called_once()
 
 
-@patch("src.mcp_servers.stock_market.server_manager.probe_and_refresh_tdx_servers")
-@patch("src.mcp_servers.stock_market.server_manager.resolve_tdx_servers")
+@patch("mcp_servers.stock_market.server_manager.probe_and_refresh_tdx_servers")
+@patch("mcp_servers.stock_market.server_manager.resolve_tdx_servers")
 def test_manager_raises_when_probe_returns_empty(mock_resolve, mock_refresh):
     """缓存服务器失败后，若并发探测结果为空应直接抛错。"""
     mock_resolve.return_value = SimpleNamespace(
@@ -65,7 +65,7 @@ def test_manager_raises_when_probe_returns_empty(mock_resolve, mock_refresh):
         manager.refresh_on_failure()
 
 
-@patch("src.mcp_servers.stock_market.data_fetcher.get_server_manager")
+@patch("mcp_servers.stock_market.data_fetcher.get_server_manager")
 def test_fetcher_returns_error_when_probe_empty(mock_get_manager):
     """并发探测为空时，MCP 取数应直接返回失败，不再继续重试。"""
     manager = Mock()
@@ -83,7 +83,7 @@ def test_fetcher_returns_error_when_probe_empty(mock_get_manager):
     assert operation.call_count == 1
 
 
-@patch("src.mcp_servers.stock_market.data_fetcher.get_server_manager")
+@patch("mcp_servers.stock_market.data_fetcher.get_server_manager")
 def test_get_daily_kline_returns_error_for_mcp_when_probe_empty(mock_get_manager):
     """并发探测为空时，对外接口应返回带 error 的失败结果。"""
     manager = Mock()
@@ -104,7 +104,7 @@ def test_get_daily_kline_returns_error_for_mcp_when_probe_empty(mock_get_manager
     manager.refresh_on_failure.assert_called_once()
 
 
-@patch("src.mcp_servers.stock_market.data_fetcher.get_server_manager")
+@patch("mcp_servers.stock_market.data_fetcher.get_server_manager")
 def test_fetcher_triggers_probe_only_after_operation_failure(mock_get_manager):
     """取数异常时刷新缓存，然后使用刷新后的服务器重试。"""
     manager = Mock()

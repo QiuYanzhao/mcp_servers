@@ -4,13 +4,13 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from src.mcp_servers.kph_market_data.client import KPHClient
-from src.mcp_servers.kph_market_data.models import (
+from mcp_servers.kph_market_data.client import KPHClient
+from mcp_servers.kph_market_data.models import (
     LiveContentResponse,
     LimitUpLadderResponse,
     MarketHighlightsResponse,
 )
-from src.mcp_servers.kph_market_data.service import KPHMarketDataService
+from mcp_servers.kph_market_data.service import KPHMarketDataService
 
 
 class TestKPHClient:
@@ -23,7 +23,7 @@ class TestKPHClient:
         assert client._his_url is not None
         assert client._timeout == 10
 
-    @patch('src.mcp_servers.kph_market_data.client.requests.post')
+    @patch('mcp_servers.kph_market_data.client.requests.post')
     def test_fetch_live_content_success(self, mock_post):
         """测试获取直播内容成功"""
         mock_response = Mock()
@@ -54,7 +54,7 @@ class TestKPHClient:
         assert isinstance(result, LiveContentResponse)
         assert result.date == "2026-06-14"
 
-    @patch('src.mcp_servers.kph_market_data.client.requests.post')
+    @patch('mcp_servers.kph_market_data.client.requests.post')
     def test_fetch_live_content_failure(self, mock_post):
         """测试获取直播内容失败"""
         import requests
@@ -64,7 +64,7 @@ class TestKPHClient:
         result = client.fetch_live_content()
         assert result is None
 
-    @patch('src.mcp_servers.kph_market_data.client.requests.post')
+    @patch('mcp_servers.kph_market_data.client.requests.post')
     def test_fetch_limit_up_ladder_success(self, mock_post):
         """测试获取涨停天梯成功"""
         mock_response = Mock()
@@ -87,7 +87,7 @@ class TestKPHClient:
         assert isinstance(result, LimitUpLadderResponse)
         assert result.date == "2026-06-14"
 
-    @patch('src.mcp_servers.kph_market_data.client.requests.post')
+    @patch('mcp_servers.kph_market_data.client.requests.post')
     def test_fetch_market_highlights_success(self, mock_post):
         """测试获取盘面亮点成功"""
         mock_response = Mock()
@@ -131,7 +131,7 @@ class TestKPHMarketDataService:
         service = KPHMarketDataService()
         
         # 创建测试数据
-        from src.mcp_servers.kph_market_data.models import LiveContentItem
+        from mcp_servers.kph_market_data.models import LiveContentItem
         item = LiveContentItem(
             id="1",
             time=1623456789,
@@ -161,7 +161,7 @@ class TestKPHMarketDataService:
         service = KPHMarketDataService()
         
         # 创建测试数据
-        from src.mcp_servers.kph_market_data.models import LimitUpStock, LimitUpTheme
+        from mcp_servers.kph_market_data.models import LimitUpStock, LimitUpTheme
         stock = LimitUpStock(
             code="600519",
             name="贵州茅台",
@@ -190,7 +190,7 @@ class TestKPHMarketDataService:
 
     def test_attach_stock_tags(self):
         service = KPHMarketDataService()
-        from src.mcp_servers.kph_market_data.models import LimitUpStock
+        from mcp_servers.kph_market_data.models import LimitUpStock
 
         stock = LimitUpStock(
             code="600519",
@@ -202,7 +202,7 @@ class TestKPHMarketDataService:
         response = LimitUpLadderResponse(stocks=[stock], themes=[], date="2026-06-14")
 
         with patch(
-            "src.mcp_servers.kph_market_data.service.lookup_stock_tags",
+            "mcp_servers.kph_market_data.service.lookup_stock_tags",
             return_value={"600519": "白酒,消费"},
         ):
             service._attach_stock_tags(response)
@@ -211,7 +211,7 @@ class TestKPHMarketDataService:
 
     def test_format_limit_up_ladder_with_tags(self):
         service = KPHMarketDataService()
-        from src.mcp_servers.kph_market_data.models import LimitUpStock, LimitUpTheme
+        from mcp_servers.kph_market_data.models import LimitUpStock, LimitUpTheme
 
         stock = LimitUpStock(
             code="600519",
@@ -232,7 +232,7 @@ class TestKPHMarketDataService:
         service = KPHMarketDataService()
         
         # 创建测试数据
-        from src.mcp_servers.kph_market_data.models import MarketHighlightItem
+        from mcp_servers.kph_market_data.models import MarketHighlightItem
         item = MarketHighlightItem(
             time_min=1623456789,
             tag_name="测试标签",

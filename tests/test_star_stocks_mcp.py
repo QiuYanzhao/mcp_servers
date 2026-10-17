@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.mcp_servers.star_stocks.service import StarStocksService
+from mcp_servers.star_stocks.service import StarStocksService
 
 EXPECTED_TOOLS = {
     "list_themes_with_sub_directions",
@@ -27,13 +27,13 @@ class TestStarStocksService:
         registered = set(service.mcp._tool_manager._tools.keys())
         assert registered == EXPECTED_TOOLS
 
-    @patch("src.mcp_servers.star_stocks.service.db_session")
+    @patch("mcp_servers.star_stocks.service.db_session")
     def test_list_themes_with_sub_directions_empty(self, mock_db_session):
         mock_db = MagicMock()
         mock_db_session.return_value.__enter__.return_value = mock_db
 
         with patch(
-            "src.mcp_servers.star_stocks.service.McpQueryService.list_themes_with_sub_directions",
+            "mcp_servers.star_stocks.service.McpQueryService.list_themes_with_sub_directions",
             return_value=[],
         ):
             service = StarStocksService()
@@ -41,13 +41,13 @@ class TestStarStocksService:
             result = fn()
             assert result.strip() == "[]"
 
-    @patch("src.mcp_servers.star_stocks.service.db_session")
+    @patch("mcp_servers.star_stocks.service.db_session")
     def test_get_theme_tree_not_found(self, mock_db_session):
         mock_db = MagicMock()
         mock_db_session.return_value.__enter__.return_value = mock_db
 
         with patch(
-            "src.mcp_servers.star_stocks.service.McpQueryService.get_theme_tree",
+            "mcp_servers.star_stocks.service.McpQueryService.get_theme_tree",
             return_value=None,
         ):
             service = StarStocksService()
