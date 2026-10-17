@@ -6,7 +6,7 @@ MCP服务器基础模块
 
 import logging
 from typing import Any, Dict
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 # 配置日志
 logging.basicConfig(
@@ -33,7 +33,7 @@ class BaseMCPServer:
         """
         self.name = name
         self.version = version
-        self.mcp = FastMCP(name)
+        self.mcp = MCPServer(name)
         logger.info(f"初始化MCP服务器: {name} v{version}")
 
     def register_tools(self):

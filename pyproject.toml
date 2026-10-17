@@ -9,7 +9,7 @@ authors = [
     {name = "A58", email = "a58@example.com"}
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0",
+    "mcp[cli]>=2.3.0",
     "mootdx>=0.9.11",
     "pandas>=3.0.3",
     "requests>=2.25.0",

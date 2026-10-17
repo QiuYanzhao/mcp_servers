@@ -1,18 +1,21 @@
 {
   "mcpServers": {
     "stock-market-service": {
-      "command": "python",
-      "args": ["start_stock_market_service.py"],
+      "command": "uv",
+      "args": ["run", "python", "start_stock_market_service.py"],
+      "cwd": "/Users/qyz/TraeProjects/mcp_servers",
       "env": {}
     },
     "kph-market-data": {
-      "command": "python",
-      "args": ["start_kph_market_data_service.py"],
+      "command": "uv",
+      "args": ["run", "python", "start_kph_market_data_service.py"],
+      "cwd": "/Users/qyz/TraeProjects/mcp_servers",
       "env": {}
     },
     "star-stocks": {
-      "command": "python",
-      "args": ["start_star_stocks_service.py"],
+      "command": "uv",
+      "args": ["run", "python", "start_star_stocks_service.py"],
+      "cwd": "/Users/qyz/TraeProjects/mcp_servers",
       "env": {}
     }
   }
