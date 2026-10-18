@@ -4,6 +4,7 @@ MCP服务器基础模块
 提供MCP服务器的基础类和通用功能
 """
 
+import inspect
 import logging
 from typing import Any, Dict
 from mcp.server import MCPServer
@@ -14,6 +15,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# 工具描述的统一引用声明（单一配置来源）：
+# 工具 docstring 只写一句话路由描述，详细用法统一收敛到复盘 skill 的参考文档；
+# 修改路径或提示文案时只需改动此常量。
+TOOL_DOC_REF = (
+    "详见 /Users/qyz/myFiles/AI/skills/a-stock-market-review/references/mcp-servers.md "
+    "中该工具小节；若上下文中已含此文档内容，直接使用，勿重复读取。"
+)
 
 
 class BaseMCPServer:
@@ -35,6 +44,19 @@ class BaseMCPServer:
         self.version = version
         self.mcp = MCPServer(name)
         logger.info(f"初始化MCP服务器: {name} v{version}")
+
+    def _tool(self, **kwargs):
+        """
+        统一工具注册入口：docstring 一句话路由描述 + 全局引用声明 TOOL_DOC_REF，
+        自动拼成完整 description；kwargs 原样透传给 mcp.tool()。
+
+        子类用 @self._tool(...) 替代 @self.mcp.tool(...)。
+        """
+        def deco(fn):
+            doc = (inspect.getdoc(fn) or "").strip()
+            description = f"{doc}\n{TOOL_DOC_REF}" if doc else TOOL_DOC_REF
+            return self.mcp.tool(description=description, **kwargs)(fn)
+        return deco
 
     def register_tools(self):
         """

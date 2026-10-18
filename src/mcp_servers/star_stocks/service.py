@@ -48,7 +48,7 @@ class StarStocksService(BaseMCPServer):
     def register_tools(self):
         # ── 查询 ──
 
-        @self.mcp.tool()
+        @self._tool()
         def list_themes_with_sub_directions() -> str:
             """查询所有题材及包含的细分方向（不含个股），细分方向按评分从高到低排序（只读）。"""
             try:
@@ -59,7 +59,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("list_themes_with_sub_directions failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def list_main_rotation_trees() -> str:
             """
             查询主线与轮动题材的完整树（题材 → 细分方向 → 个股）。
@@ -73,7 +73,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("list_main_rotation_trees failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def get_theme_tree(theme_id: int) -> str:
             """
             查询指定题材的完整树（题材 → 细分方向 → 个股）。
@@ -91,7 +91,7 @@ class StarStocksService(BaseMCPServer):
 
         # ── 新增 ──
 
-        @self.mcp.tool()
+        @self._tool()
         def create_theme(
             name: str,
             role_type: RoleType = "normal",
@@ -113,7 +113,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("create_theme failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def create_sub_direction(theme_id: int, name: str) -> str:
             """向指定题材下新增细分方向（不可设置评分）。"""
             try:
@@ -125,7 +125,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("create_sub_direction failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def create_theme_stock(
             stock_type: StockType,
             code: str,
@@ -155,7 +155,7 @@ class StarStocksService(BaseMCPServer):
 
         # ── 更新 ──
 
-        @self.mcp.tool()
+        @self._tool()
         def update_theme(
             theme_id: int,
             role_type: RoleType | None = None,
@@ -177,7 +177,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("update_theme failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def update_theme_stock(
             entry_id: int,
             stock_type: StockType | None = None,
@@ -208,7 +208,7 @@ class StarStocksService(BaseMCPServer):
 
         # ── 删除 ──
 
-        @self.mcp.tool()
+        @self._tool()
         def delete_theme_stock(entry_id: int) -> str:
             """删除细分方向或题材下的指定个股条目。"""
             try:
@@ -221,7 +221,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("delete_theme_stock failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def delete_sub_direction(sub_direction_id: int) -> str:
             """删除指定细分方向（一并删除其下关联个股）。"""
             try:
@@ -234,7 +234,7 @@ class StarStocksService(BaseMCPServer):
                 logger.exception("delete_sub_direction failed")
                 return err(str(e))
 
-        @self.mcp.tool()
+        @self._tool()
         def delete_theme(theme_id: int) -> str:
             """删除指定题材（一并删除关联细分方向与个股）。"""
             try:

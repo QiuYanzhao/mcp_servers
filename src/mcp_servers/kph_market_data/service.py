@@ -39,19 +39,11 @@ class KPHMarketDataService(BaseMCPServer):
     def register_tools(self):
         """注册工具方法"""
 
-        @self.mcp.tool()
+        @self._tool()
         def get_live_content(index: int = 0) -> str:
             """
-            获取当日大盘直播内容（概念点接口）
-
-            返回当日实时的大盘直播流信息，包含盘面解读、关联个股和板块、
-            概念爆发原因等关键信息。适用于了解当前盘面动态。
-
-            Args:
-                index: 分页起始位置，默认 0（最新数据）
-
-            Returns:
-                格式化的直播内容文本
+            获取当日大盘直播流信息（盘面解读、关联个股/板块、概念爆发原因）。
+            index 分页起始位置，默认0（最新数据）。
             """
             try:
                 logger.info(f"获取实时大盘直播数据，index: {index}")
@@ -63,16 +55,10 @@ class KPHMarketDataService(BaseMCPServer):
                 logger.error(f"获取实时大盘直播数据失败: {e}")
                 return f"请求失败: {str(e)}"
 
-        @self.mcp.tool()
+        @self._tool()
         def get_limit_up_ladder() -> str:
             """
-            获取当日涨停天梯数据
-
-            返回当日涨停题材排名和连板个股列表，包含题材涨停家数、成交额、
-            个股连板高度、涨停时间、个股标签（来自 stock_info）等信息。
-
-            Returns:
-                格式化的涨停天梯数据文本
+            获取当日涨停天梯数据（涨停题材排名与连板个股列表，含题材涨停家数、连板高度、涨停时间、个股标签）。
             """
             try:
                 logger.info("获取实时涨停天梯数据")
@@ -85,20 +71,11 @@ class KPHMarketDataService(BaseMCPServer):
                 logger.error(f"获取实时涨停天梯数据失败: {e}")
                 return f"请求失败: {str(e)}"
 
-        @self.mcp.tool()
+        @self._tool()
         def get_market_highlights(index: int = 0, limit: int = 30) -> str:
             """
-            获取当日盘面亮点数据
-
-            返回当日盘面亮点事件列表，包含时间节点、标签类型、所属题材和
-            关联个股等信息。适用于快速了解盘面核心变化。
-
-            Args:
-                index: 分页起始位置，默认 0
-                limit: 返回条数，默认 30
-
-            Returns:
-                格式化的盘面亮点文本
+            获取当日盘面亮点事件列表（时间节点、标签类型、所属题材、关联个股）。
+            index 默认0；limit 返回条数，默认30。
             """
             try:
                 logger.info(f"获取实时盘面亮点数据，index: {index}, limit: {limit}")
@@ -110,21 +87,11 @@ class KPHMarketDataService(BaseMCPServer):
                 logger.error(f"获取实时盘面亮点数据失败: {e}")
                 return f"请求失败: {str(e)}"
 
-        @self.mcp.tool()
+        @self._tool()
         def get_historical_live_content(date: str, index: int = 0, st: int = 0) -> str:
             """
-            获取历史大盘直播内容（概念点接口）
-
-            返回指定日期的大盘直播流信息，包含盘面解读、关联个股和板块、
-            概念爆发原因等关键信息。适用于复盘历史盘面。
-
-            Args:
-                date: 历史日期，格式为 YYYY-MM-DD（如 2026-05-28）
-                index: 分页起始位置，默认 0
-                st: 返回条数限制，0 表示不限制
-
-            Returns:
-                格式化的历史直播内容文本
+            获取指定历史日期的大盘直播流信息（概念点接口），用于复盘历史盘面。
+            date 必填，格式 YYYY-MM-DD；index 默认0；st 返回条数限制，0表示不限制。
             """
             try:
                 logger.info(f"获取历史大盘直播数据，date: {date}, index: {index}, st: {st}")
@@ -136,19 +103,11 @@ class KPHMarketDataService(BaseMCPServer):
                 logger.error(f"获取历史大盘直播数据失败: {e}")
                 return f"请求失败: {str(e)}"
 
-        @self.mcp.tool()
+        @self._tool()
         def get_historical_limit_up_ladder(date: str) -> str:
             """
-            获取历史涨停天梯数据
-
-            返回指定日期的涨停题材排名和连板个股列表，包含题材涨停家数、成交额、
-            个股连板高度、涨停时间、个股标签（来自 stock_info）等信息。
-
-            Args:
-                date: 历史日期，格式为 YYYY-MM-DD（如 2026-05-28）
-
-            Returns:
-                格式化的历史涨停天梯数据文本
+            获取指定历史日期的涨停天梯数据（涨停题材排名与连板个股列表）。
+            date 必填，格式 YYYY-MM-DD。
             """
             try:
                 logger.info(f"获取历史涨停天梯数据，date: {date}")
@@ -161,23 +120,13 @@ class KPHMarketDataService(BaseMCPServer):
                 logger.error(f"获取历史涨停天梯数据失败: {e}")
                 return f"请求失败: {str(e)}"
 
-        @self.mcp.tool()
+        @self._tool()
         def get_historical_market_highlights(
             date: str, index: int = 0, limit: int = 30
         ) -> str:
             """
-            获取历史盘面亮点数据
-
-            返回指定日期的盘面亮点事件列表，包含时间节点、标签类型、所属题材
-            和关联个股等信息。适用于复盘历史盘面核心变化。
-
-            Args:
-                date: 历史日期，格式为 YYYY-MM-DD（如 2026-05-28）
-                index: 分页起始位置，默认 0
-                limit: 返回条数，默认 30
-
-            Returns:
-                格式化的历史盘面亮点文本
+            获取指定历史日期的盘面亮点事件列表（时间节点、标签类型、所属题材、关联个股）。
+            date 必填，格式 YYYY-MM-DD；index 默认0；limit 返回条数，默认30。
             """
             try:
                 logger.info(f"获取历史盘面亮点数据，date: {date}, index: {index}, limit: {limit}")
