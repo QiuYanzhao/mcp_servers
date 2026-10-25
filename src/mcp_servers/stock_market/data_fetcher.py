@@ -1,7 +1,7 @@
 """
 A股行情数据获取模块
 
-使用mootdx获取A股行情数据，支持：
+使用eltdx获取A股行情数据，支持：
 - 1分钟K线数据（单日）
 - 日K数据（含均线、涨跌停、流通市值）
 - 前复权处理
@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from mootdx.quotes import Quotes
+from eltdx import TdxClient
 
 from . import trading_calendar
 from .server_manager import (
@@ -37,6 +37,91 @@ except ImportError:  # pragma: no cover - 测试环境无 star_stocks 依赖时�
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+
+class EltdxQuotes:
+    """eltdx 客户端的 mootdx 兼容适配层。
+
+    模拟 mootdx.quotes.Quotes 的接口（bars/quotes/xdxr/close），
+    返回 DataFrame 列名与 mootdx 一致，使上层代码无需改动。
+    日K直接通过 adjust='qfq' 获取前复权数据，xdxr 返回空以跳过手动复权。
+    """
+
+    def __init__(self, host: str, port: int, timeout: float = 15.0):
+        self._client = TdxClient(
+            host=f"{host}:{port}",
+            probe_hosts=False,
+            timeout=timeout,
+        )
+        self._client.connect()
+        self.host = host
+        self.port = port
+
+    @classmethod
+    def factory(cls, market: str = "std", server: Tuple[str, int] = ("119.147.212.81", 7709), timeout: float = 15.0):
+        return cls(host=server[0], port=server[1], timeout=timeout)
+
+    def bars(self, symbol: str, frequency: int = 9, offset: int = 100, start: int = 0):
+        """获取K线，返回 DataFrame（列名与 mootdx 兼容）。
+
+        frequency: 9=日K, 7=1分钟K
+        日K自动前复权（adjust='qfq'）。
+        """
+        period = "day" if frequency == 9 else "1min"
+        adjust = "qfq" if frequency == 9 else None
+        series = self._client.bars.get(
+            code=symbol,
+            period=period,
+            count=offset,
+            adjust=adjust,
+        )
+        bars = getattr(series, "bars", None)
+        if not bars:
+            return pd.DataFrame()
+        records = []
+        for b in bars:
+            records.append({
+                "datetime": b.time,
+                "open": float(b.open),
+                "high": float(b.high),
+                "low": float(b.low),
+                "close": float(b.close),
+                "vol": float(b.volume_lots),
+                "amount": float(b.amount),
+            })
+        return pd.DataFrame(records)
+
+    def quotes(self, symbol: str):
+        """获取实时行情快照，返回 DataFrame（单行，列名与 mootdx 兼容）。"""
+        snapshots = self._client.quotes.get_snapshots(codes=[symbol])
+        if not snapshots:
+            return pd.DataFrame()
+        s = snapshots[0]
+        return pd.DataFrame([{
+            "code": symbol,
+            "price": float(s.last_price),
+            "last_close": float(s.pre_close_price),
+            "open": float(s.open_price),
+            "high": float(s.high_price),
+            "low": float(s.low_price),
+            "vol": float(s.total_hand),
+            "amount": float(s.amount),
+        }])
+
+    def xdxr(self, symbol: str):
+        """除权除息——eltdx 日K已前复权，返回空 DataFrame 跳过手动复权。"""
+        return pd.DataFrame(columns=["category", "year", "month", "day",
+                                      "fenhong", "peigu", "peigujia", "songzhuangu"])
+
+    def close(self):
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
+
+# 兼容旧引用
+Quotes = EltdxQuotes
 
 
 class NonRetryableError(Exception):

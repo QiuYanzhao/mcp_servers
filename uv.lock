@@ -403,6 +403,19 @@ wheels = [
 ]
 
 [[package]]
+name = "eltdx"
+version = "3.3.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/ce/ed/d28b09bc33829a43169af4ba8929b41da4f71e9fde04caccec7ca48e76a4/eltdx-3.3.0.tar.gz", hash = "sha256:16fad43e518618728a2ac5c0a5d0abf0a3bcce3ccb12daccec55d8fa912d9a9f" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/6e/83/24378a1b67320b13061d9742b95494fb8963e4a46b492068378ab034af67/eltdx-3.3.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:566e4db3141a93d4167f67b420436619d017ec645c76842eb321c08f1a455b5b" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/99/68/3251e0431d3846f4ce9c86991c3587d59c9bb495dd737b9f1a1d1f3f4ce6/eltdx-3.3.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:c28dbe181233e9980d3e844c2cc826cf544c26814e3070f512be45cbd7a1e6a3" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/03/de/ed43ed429533959af39c4d2ad855f399967c28d163fc751d3f4fb243f72a/eltdx-3.3.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e74a1960903109b532dc31f5699909e888defe4c6a9da7710d77f8a24b20c9c9" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/51/14/ee551ced93553fd2020c841c8dd6eda0df9ba5807ee365b72be06b258432/eltdx-3.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:39183f191d583b0a53e9ee93750ca660616fc0645612f162f8cb408c79259a3a" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/09/f4/8ad9490dfe245929d785a0f5c8dce560a89db95707815f51984d8895e6f0/eltdx-3.3.0-cp310-abi3-win_amd64.whl", hash = "sha256:9f92575e3c17f55ac24b796b0c2ebfa88bba7025b07848ab3514f3f6494d6b7f" },
+]
+
+[[package]]
 name = "exchange-calendars"
 version = "4.13.2"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1011,8 +1024,8 @@ name = "mcp-servers"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "eltdx" },
     { name = "mcp", extra = ["cli"] },
-    { name = "mootdx" },
     { name = "pandas" },
     { name = "requests" },
     { name = "star-stocks" },
@@ -1034,9 +1047,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=21.0" },
+    { name = "eltdx", specifier = ">=3.3.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=3.8" },
     { name = "mcp", extras = ["cli"], specifier = ">=2.3.0" },
-    { name = "mootdx", specifier = ">=0.9.11" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=0.800" },
     { name = "pandas", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=6.0" },
@@ -1068,25 +1081,6 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8" },
-]
-
-[[package]]
-name = "mootdx"
-version = "0.9.11"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "click" },
-    { name = "httpx" },
-    { name = "prettytable" },
-    { name = "py-mini-racer" },
-    { name = "pyyaml" },
-    { name = "tdxpy" },
-    { name = "tenacity" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/84/1e/4759e609db74290f44d0150dcc154bea588486d08384430c270721d4036a/mootdx-0.9.11.tar.gz", hash = "sha256:070eb5d2fb8de4b7d8944685a40af7c78c5c4ec6f5cc8d69d8f0da4bb6a79ccb" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/59/7f/1cbaaf501a8da99ea79b7151afe03a77b570ae76f6139de0fd63fd7dbc00/mootdx-0.9.11-py2.py3-none-any.whl", hash = "sha256:9a2baa1970c4f54bb736011f4aa9c3f5c81bffd7a1da9d79576a4d4de50b607a" },
 ]
 
 [[package]]
@@ -1452,29 +1446,6 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746" },
-]
-
-[[package]]
-name = "prettytable"
-version = "3.18.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "wcwidth" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/81/74/ba08d81e668ccfe8658d7520a307e63c19862c08eb4ccb26f356c5239a7a/prettytable-3.18.0.tar.gz", hash = "sha256:439217116152244369caf3d9f1caf2f9fe29b03bd79e88d2928c8e718c95d680" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/fe/be/2e6798ace5cc036f5d05d36b7b2fd85346f1a708c87060890b070d0ec607/prettytable-3.18.0-py3-none-any.whl", hash = "sha256:b3346e0e6f79180833aebaac088ae926340586cf6d7d991b9eb125b65f72313a" },
-]
-
-[[package]]
-name = "py-mini-racer"
-version = "0.6.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/50/97/a578b918b2e5923dd754cb60bb8b8aeffc85255ffb92566e3c65b148ff72/py_mini_racer-0.6.0.tar.gz", hash = "sha256:f71e36b643d947ba698c57cd9bd2232c83ca997b0802fc2f7f79582377040c11" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/13/13/058240c7fd1fbf29a24bda048d93346c2a56275736b76b56afe64050a161/py_mini_racer-0.6.0-py2.py3-none-macosx_10_10_x86_64.whl", hash = "sha256:346e73bb89a2024888244d487834be24a121089ceb0641dd0200cb96c4e24b57" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/29/a9/8ce0ca222ef04d602924a1e099be93f5435ca6f3294182a30574d4159ca2/py_mini_racer-0.6.0-py2.py3-none-manylinux1_x86_64.whl", hash = "sha256:42896c24968481dd953eeeb11de331f6870917811961c9b26ba09071e07180e2" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/5d/71/76ac5d593e14b148a4847b608c5ad9a2c7c4827c796c33b396d0437fa113/py_mini_racer-0.6.0-py2.py3-none-win_amd64.whl", hash = "sha256:97cab31bbf63ce462ba4cd6e978c572c916d8b15586156c7c5e0b2e42c10baab" },
 ]
 
 [[package]]
@@ -2131,11 +2102,11 @@ version = "0.1.0"
 source = { editable = "../star_stocks" }
 dependencies = [
     { name = "apscheduler" },
+    { name = "eltdx" },
     { name = "exchange-calendars" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "markdown" },
-    { name = "mootdx" },
     { name = "openai" },
     { name = "pandas" },
     { name = "playwright" },
@@ -2154,11 +2125,11 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10.4" },
+    { name = "eltdx", specifier = ">=3.3.0" },
     { name = "exchange-calendars", specifier = ">=4.5.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.1.4" },
     { name = "markdown", specifier = ">=3.7" },
-    { name = "mootdx", specifier = ">=0.9.11" },
     { name = "openai", specifier = ">=1.10.0" },
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "playwright", specifier = ">=1.40.0" },
@@ -2187,27 +2158,6 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/25/44/ec35f1b6e83094b997da438a02c8c9b0ade2b1e84cfc48bd4656780760a6/starlette-1.2.1.tar.gz", hash = "sha256:9b9b5ebb992e67d6093741e63c2f59e4f6fff986f81163c087867bd7b924b3f6" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/1c/54/196d0c1db10af76baa4f64894448505d60d3cdf70ef92cbb35f46a4e4c71/starlette-1.2.1-py3-none-any.whl", hash = "sha256:4de0082d08c8f6764a85a54cf1120d6939507a19905c7768acad2a9f875d2b89" },
-]
-
-[[package]]
-name = "tdxpy"
-version = "0.2.7"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "pandas" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/e3/63/ecc88446a1e693336dfe57aa3c95d02b3a1dc0d7ba0c4b256bea471c6033/tdxpy-0.2.7.tar.gz", hash = "sha256:e2462cf61f5cef845e70ac9be071ba6386b226bec4075de4af9807b60b7ae70d" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/e2/db/6513418e77e3635148d251eb15e6fbd32bad7ee4842b81bda8be7d2fbd0a/tdxpy-0.2.7-py3-none-any.whl", hash = "sha256:5514d35608fac2c7b2acf693de6f41ba7ccda58207b65a3f374c89887560737c" },
-]
-
-[[package]]
-name = "tenacity"
-version = "9.1.4"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55" },
 ]
 
 [[package]]
@@ -2470,15 +2420,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/27/0b/a54103cfd732bb703c7a749222011a0483ef3705948dae3b203158601119/watchfiles-1.2.0-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:094b9b70103d4e963499bdea001ee3c2697b144cd9ae6218a62c0f89ec9e31db" },
     { url = "https://mirrors.aliyun.com/pypi/packages/5e/2c/73f31a3b893886206c3f54d73e8ad8dee58cdb2f69ad2622e0a8a9e07f4e/watchfiles-1.2.0-pp311-pypy311_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b0ef001f8c25ad0fa9529f914c1600647ecd0f542d11c19b7894768c67b6acb7" },
     { url = "https://mirrors.aliyun.com/pypi/packages/e9/f9/45d021e4a5cc7b9dd567f7cbb06d3b75f751a690063fb6cc7ec60f4e46b7/watchfiles-1.2.0-pp311-pypy311_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a88fc94e647bc4eec523f1caa540258eb71d14278b9daf72fa1e2658a98df0f0" },
-]
-
-[[package]]
-name = "wcwidth"
-version = "0.8.1"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/49/b4/51fe890511f0f242d07cb1ebe6a5b6db417262b9d2568b460347c57d95cc/wcwidth-0.8.1.tar.gz", hash = "sha256:faf5b4a5366a72dc49cad48cdf21f52bdf63bdda995178e483ba247ff79089b9" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/bd/6e/95b0e537de1f4d4301f76f944642c6da50d1511cc7b3d64dc418a66c7509/wcwidth-0.8.1-py3-none-any.whl", hash = "sha256:f453740b1e4a4f3291faa37944c555d71056c4da08d59809b307ef4feba695c8" },
 ]
 
 [[package]]
