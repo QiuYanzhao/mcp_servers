@@ -65,7 +65,7 @@ def fetcher(monkeypatch):
     f._client = None
     f._current_server = None
     f._stock_name_to_code = {}
-    f._adjust_events_cache = {}
+    f._daily_cache = {}
     monkeypatch.setattr(
         trading_calendar, "trading_days_after", lambda day, until=None: len(DAYS) - 1 - DAYS.index(day)
     )
@@ -140,27 +140,6 @@ class TestTargetDayValidation:
         with pytest.raises(NonRetryableError) as exc:
             fetcher._normalize_target_day("abc")
         assert "格式" in str(exc.value)
-
-
-class TestQfq:
-    def test_factors_apply_before_event_only(self, fetcher, monkeypatch):
-        """事件日之前的价格乘以乘数，事件日及之后不变；volume 不调整"""
-        df = _make_full_df(["2026-10-09", "2026-10-12"])
-        monkeypatch.setattr(fetcher, "_get_adjust_events", lambda symbol: [("2026-10-12", 0.5)])
-
-        out = fetcher._apply_qfq(None, "300308", df)
-
-        before = out[out["datetime"].str.startswith("2026-10-09")]
-        after = out[out["datetime"].str.startswith("2026-10-12")]
-        assert set(before["close"]) == {5.0}
-        assert set(after["close"]) == {10.0}
-        assert set(out["volume"]) == {100}  # 量能不参与复权
-
-    def test_no_events_returns_original(self, fetcher, monkeypatch):
-        df = _make_full_df(["2026-10-15"])
-        monkeypatch.setattr(fetcher, "_get_adjust_events", lambda symbol: [])
-        out = fetcher._apply_qfq(None, "600519", df)
-        assert out is df
 
 
 class TestMinutePayloadErrors:

@@ -2,13 +2,16 @@
 A股行情数据获取模块
 
 使用eltdx获取A股行情数据，支持：
-- 1分钟K线数据（单日）
-- 日K数据（含均线、涨跌停、流通市值）
-- 前复权处理
+- 1分钟K线数据（单日，服务器端前复权）
+- 日K数据（含均线、涨跌停；昨收取服务器自带 last_close）
+- 分时走势（价格 + 服务器均价线 + 每分钟成交量）
 - 服务器自动探测和故障转移
+
+复权口径：日K与分钟K均由 eltdx 直接请求 adjust='qfq'，由服务器返回前复权数据，
+本地不再做除权乘数计算（eltdx 的 xdxr 已无数据）。昨收（pre_close）优先取
+K线记录自带的 last_close 字段，缺失时退回前一根收盘价。
 """
 
-import bisect
 import json
 import logging
 import os
@@ -42,9 +45,12 @@ logger = logging.getLogger(__name__)
 class EltdxQuotes:
     """eltdx 客户端的 mootdx 兼容适配层。
 
-    模拟 mootdx.quotes.Quotes 的接口（bars/quotes/xdxr/close），
-    返回 DataFrame 列名与 mootdx 一致，使上层代码无需改动。
-    日K直接通过 adjust='qfq' 获取前复权数据，xdxr 返回空以跳过手动复权。
+    模拟 mootdx.quotes.Quotes 的接口（bars/quotes/intraday/close），返回列名
+    与 mootdx 一致，使上层代码无需改动。日K与分钟K统一由服务器返回前复权
+    数据（adjust='qfq'），并额外透出服务器自带的两个字段：
+
+    - last_close：该根K线对应的昨收价（元，来自 last_close_price_milli）
+    - shares：成交量（股，来自 volume_wire_value；vol 保持为手）
     """
 
     def __init__(self, host: str, port: int, timeout: float = 15.0):
@@ -64,22 +70,27 @@ class EltdxQuotes:
     def bars(self, symbol: str, frequency: int = 9, offset: int = 100, start: int = 0):
         """获取K线，返回 DataFrame（列名与 mootdx 兼容）。
 
-        frequency: 9=日K, 7=1分钟K
-        日K自动前复权（adjust='qfq'）。
+        frequency: 9=日K, 7=1分钟K；两者均请求服务器前复权（adjust='qfq'）。
+        start: 从最新一根往前跳过的根数（按交易日取数时由上层计算）。
         """
         period = "day" if frequency == 9 else "1min"
-        adjust = "qfq" if frequency == 9 else None
         series = self._client.bars.get(
             code=symbol,
             period=period,
+            start=start,
             count=offset,
-            adjust=adjust,
+            adjust="qfq",
         )
         bars = getattr(series, "bars", None)
         if not bars:
             return pd.DataFrame()
         records = []
         for b in bars:
+            last_close = (
+                None
+                if b.last_close_price_milli is None
+                else b.last_close_price_milli / 1000.0
+            )
             records.append({
                 "datetime": b.time,
                 "open": float(b.open),
@@ -88,6 +99,8 @@ class EltdxQuotes:
                 "close": float(b.close),
                 "vol": float(b.volume_lots),
                 "amount": float(b.amount),
+                "last_close": last_close,
+                "shares": float(b.volume_wire_value),
             })
         return pd.DataFrame(records)
 
@@ -108,10 +121,17 @@ class EltdxQuotes:
             "amount": float(s.amount),
         }])
 
-    def xdxr(self, symbol: str):
-        """除权除息——eltdx 日K已前复权，返回空 DataFrame 跳过手动复权。"""
-        return pd.DataFrame(columns=["category", "year", "month", "day",
-                                      "fenhong", "peigu", "peigujia", "songzhuangu"])
+    def intraday(self, symbol: str, trading_date: Optional[str] = None):
+        """分时走势（原生接口）：传交易日取历史分时，不传取最近交易时段。
+
+        返回 eltdx MinuteSeries：points 每点含 price/volume/avg_price（当日分时
+        带均价线），series 含 prev_close（历史分时为当日实际昨收）。
+        """
+        if trading_date:
+            return self._client.minutes.history(
+                code=symbol, trading_date=trading_date
+            )
+        return self._client.minutes.today(code=symbol)
 
     def close(self):
         try:
@@ -146,7 +166,7 @@ class StockDataFetcher:
     """
     A股行情数据获取类
 
-    使用mootdx获取A股行情数据，提供前复权处理和指标计算功能。
+    使用eltdx获取A股行情数据（服务器端前复权），提供指标计算功能。
     支持服务器自动探测和故障转移。
     """
 
@@ -163,10 +183,9 @@ class StockDataFetcher:
         self._client: Optional[Quotes] = None
         self._current_server: Optional[Tuple[str, int]] = None
         self._stock_name_to_code: Dict[str, str] = {}
-        # 除权事件乘数缓存：symbol -> (写入时刻, [(事件日, 前复权乘数), ...])
-        self._adjust_events_cache: Dict[str, Tuple[float, List[Tuple[str, float]]]] = {}
-        # 原始日K缓存：symbol -> (写入时刻, DataFrame)（复权乘数计算、昨收取数复用）
-        self._daily_raw_cache: Dict[str, Tuple[float, pd.DataFrame]] = {}
+        # 日K缓存（服务器前复权，含 last_close/shares）：symbol -> (写入时刻, DataFrame)
+        # 供昨收取数、均线补数复用，避免每次请求重复拉取
+        self._daily_cache: Dict[str, Tuple[float, pd.DataFrame]] = {}
         self._load_stock_list()
 
         if use_server_manager:
@@ -574,7 +593,7 @@ class StockDataFetcher:
                 logger.debug("关闭连接异常: %s", e)
             self._client = None
             self._current_server = None
-            logger.info("关闭mootdx行情客户端")
+            logger.info("关闭eltdx行情客户端")
 
     def _execute_with_retry(self, operation_name: str, func, *args, **kwargs):
         """
@@ -682,8 +701,8 @@ class StockDataFetcher:
                 f"{symbol} 在 {day_str} 无分钟数据（停牌/未上市，或日期超出分钟线可回溯范围）"
             )
 
-        # 前复权 + 昨收（与日K同一复权口径）
-        df = self._apply_qfq(client, symbol, rows)
+        # 分钟线价格已由服务器前复权（adjust='qfq'）；昨收取日K同口径的服务器昨收
+        df = rows
         pre_close = self._get_prev_close(symbol, day_str)
         logger.info("获取%s在%s的分钟线 %d 根，昨收 %s", symbol, day_str, len(df), pre_close)
 
@@ -719,6 +738,7 @@ class StockDataFetcher:
                 "date": day_str,
                 "frequency": "adaptive_1min",
                 "count": len(data_list),
+                "prev_close": pre_close,
                 "data": data_list,
             }
 
@@ -728,6 +748,7 @@ class StockDataFetcher:
             "date": day_str,
             "frequency": "1min",
             "count": len(data_list),
+            "prev_close": pre_close,
             "data": data_list,
         }
 
@@ -805,34 +826,137 @@ class StockDataFetcher:
         return None
 
     def _get_prev_close(self, symbol: str, day_str: str) -> float:
-        """目标交易日的昨收（与分钟线同一复权口径；取不到返回 0.0）。"""
+        """目标交易日的昨收（与前复权价格同一口径；取不到返回 0.0）。
+
+        直接使用日K记录自带的 last_close 字段（服务器给出的昨收，已随 adjust='qfq'
+        复权到最新基准）；该字段缺失（如窗口首根）时退回前一根收盘价。
+        不再拉取 250 根日K并本地定位——所需条数由缓存复用。
+        """
         try:
-            raw = self._get_raw_daily(symbol)
-            if raw is None or len(raw) == 0:
+            daily = self._get_daily(symbol)
+            if daily is None or len(daily) == 0:
                 return 0.0
-            adjusted = self._apply_qfq(None, symbol, raw)
-            days = [str(v)[:10] for v in adjusted["datetime"]]
+            days = [str(v)[:10] for v in daily["datetime"]]
             if day_str not in days:
                 return 0.0
             pos = days.index(day_str)
+            if "last_close" in daily.columns:
+                value = daily["last_close"].iloc[pos]
+                if pd.notna(value) and float(value) > 0:
+                    return round(float(value), 2)
             if pos == 0:
                 return 0.0
-            return round(float(adjusted["close"].iloc[pos - 1]), 2)
+            return round(float(daily["close"].iloc[pos - 1]), 2)
         except Exception as e:
             logger.warning("获取%s在%s的昨收失败: %s", symbol, day_str, e)
         return 0.0
 
-    def _get_raw_daily(self, symbol: str, count: int = 250) -> Optional[pd.DataFrame]:
-        """未被复权的日K（按股票短时缓存），供复权乘数计算与昨收取数复用。
+    def _get_daily(self, symbol: str, count: int = 250) -> Optional[pd.DataFrame]:
+        """日K（服务器前复权，含 last_close/shares 字段），按股票短时缓存。
 
         缓存带 TTL：MCP 服务常驻进程，跨交易日仍须能取到最新一根日K。
+        已缓存条数不足时自动加取，避免短窗口调用影响后续定位。
         """
-        cached = self._daily_raw_cache.get(symbol)
-        if cached and time.monotonic() - cached[0] < CACHE_TTL_SECONDS:
+        cached = self._daily_cache.get(symbol)
+        if (
+            cached
+            and time.monotonic() - cached[0] < CACHE_TTL_SECONDS
+            and len(cached[1]) >= count
+        ):
             return cached[1]
         df = self._get_client().bars(symbol=symbol, frequency=9, offset=count)
-        self._daily_raw_cache[symbol] = (time.monotonic(), df)
+        self._daily_cache[symbol] = (time.monotonic(), df)
         return df
+
+    def get_intraday_chart(self, symbol: str, date: str = "") -> Dict:
+        """
+        获取指定交易日分时走势（价格 + 均价线 + 每分钟成交量）
+
+        数据来源为通达信原生分时接口（eltdx minutes）：
+        - 价格/每点成交量：服务器直给（成交量单位=手）
+        - 均价线 avg_price：当日分时由服务器直给，无需本地累计成交额自算
+          （历史分时协议不带均价，avg_price 返回 null）
+        - 昨收 prev_close：历史分时由服务器直给；当日分时缺失时回退日K昨收
+
+        Args:
+            symbol: 股票代码
+            date: 目标交易日 YYYY-MM-DD；留空=最近交易日
+
+        Returns:
+            {"symbol", "date", "frequency", "count", "prev_close", "data": [...]}；
+            失败返回 {"error": ..., "data": []}
+        """
+        try:
+            return self._execute_with_retry(
+                f"获取{symbol}的分时数据",
+                self._fetch_intraday_payload,
+                symbol,
+                date,
+            )
+        except NonRetryableError as e:
+            logger.warning("获取%s的分时数据失败（参数/数据范围类）: %s", symbol, e)
+            return {"error": str(e), "data": []}
+        except Exception as e:
+            logger.error("获取%s的分时数据失败: %s", symbol, e)
+            return {"error": str(e), "data": []}
+
+    def _fetch_intraday_payload(self, symbol: str, date: str = "") -> Dict:
+        """获取目标交易日分时（异常向外抛，供重试逻辑区分节点问题与无数据）。"""
+        client = self._get_client()
+        day_str, is_default = self._normalize_target_day(date)
+
+        series = self._fetch_intraday_series(client, symbol, day_str)
+        if not getattr(series, "points", None) and is_default:
+            # 盘前当日尚无分时数据 → 回退上一交易日
+            prev_day = trading_calendar.resolve_session(day_str, "previous").isoformat()
+            series = self._fetch_intraday_series(client, symbol, prev_day)
+            if getattr(series, "points", None):
+                logger.info("%s 在 %s 暂无分时数据，回退到上一交易日 %s", symbol, day_str, prev_day)
+                day_str = prev_day
+
+        points = getattr(series, "points", None) if series is not None else None
+        if not points:
+            raise NonRetryableError(
+                f"{symbol} 在 {day_str} 无分时数据（停牌/未上市，或日期超出分时回溯范围）"
+            )
+
+        # 昨收：历史分时服务器直给（当日实际昨收）；当日分时为空时回退日K昨收
+        prev_close = getattr(series, "prev_close", None)
+        if prev_close is None or float(prev_close) <= 0:
+            prev_close = self._get_prev_close(symbol, day_str)
+        prev_close = round(float(prev_close), 2) if prev_close else 0.0
+
+        data = []
+        for point in points:
+            data.append(
+                {
+                    "time": point.time_label,
+                    "price": round(float(point.price), 2),
+                    "avg_price": (
+                        round(float(point.avg_price), 2)
+                        if point.avg_price is not None
+                        else None
+                    ),
+                    "volume": int(point.volume),
+                    "change_pct": self._calc_change_pct(float(point.price), prev_close),
+                }
+            )
+
+        return {
+            "symbol": symbol,
+            "date": day_str,
+            "frequency": "intraday",
+            "count": len(data),
+            "prev_close": prev_close,
+            "data": data,
+        }
+
+    def _fetch_intraday_series(self, client: Quotes, symbol: str, day_str: str):
+        """按交易日/最近交易时段调用原生分时接口。"""
+        latest = trading_calendar.latest_trading_day().isoformat()
+        if day_str == latest:
+            return client.intraday(symbol)
+        return client.intraday(symbol, day_str)
 
     def get_daily_kline(
         self,
@@ -859,18 +983,15 @@ class StockDataFetcher:
             client = self._get_client()
             logger.info("获取%s的日K线数据，数量: %d", symbol, count)
 
-            # 获取日K线数据 (frequency=9 对应日线)
+            # 获取日K线数据 (frequency=9 对应日线；适配层已请求 adjust='qfq'，
+            # 价格由服务器直接返回前复权，无需本地除权计算)
             df = client.bars(symbol=symbol, frequency=9, offset=count)
 
             if df is None or df.empty:
                 logger.warning("未获取到%s的日K线数据", symbol)
                 raise ConnectionError("未获取到日K线数据")
 
-            # 前复权处理
-            df = self._apply_qfq(client, symbol, df)
-
-            # 确保列名一致（mootdx返回的列名可能是close或vol）
-            close_col = "close" if "close" in df.columns else "close"
+            close_col = "close"
             vol_col = "volume" if "volume" in df.columns else "vol"
 
             # 计算均线
@@ -879,8 +1000,13 @@ class StockDataFetcher:
                 df["ma10"] = df[close_col].rolling(window=10).mean()
                 df["ma20"] = df[close_col].rolling(window=20).mean()
 
-            # 计算昨日收盘价
-            df["pre_close"] = df[close_col].shift(1)
+            # 昨收：优先用服务器自带的 last_close 字段（与复权价同口径），
+            # 仅窗口首根缺失时退回前一根收盘
+            if "last_close" in df.columns:
+                df["pre_close"] = df["last_close"]
+                df["pre_close"] = df["pre_close"].fillna(df[close_col].shift(1))
+            else:
+                df["pre_close"] = df[close_col].shift(1)
 
             # 计算涨跌停价格（按交易所规则四舍五入到分，再判断封板状态）
             if include_limit:
@@ -914,6 +1040,7 @@ class StockDataFetcher:
                     "low": round(float(row.get("low", 0)), 2),
                     "close": round(float(row.get(close_col, 0)), 2),
                     "volume": int(row.get(vol_col, 0)),
+                    "shares": int(round(float(row.get("shares", 0)))),  # 成交量（股，服务器直给）
                     "amount": round(float(row.get("amount", 0)), 2),
                 }
 
@@ -975,6 +1102,8 @@ class StockDataFetcher:
                 "indicators": {
                     "ma": ["ma5", "ma10", "ma20"] if include_ma else [],
                     "pre_close": True,
+                    "pre_close_source": "server_last_close",
+                    "volume_unit": {"volume": "手", "shares": "股"},
                     "limit": ["limit_up", "limit_down", "is_limit_up", "is_limit_down"]
                     if include_limit
                     else [],
@@ -990,141 +1119,6 @@ class StockDataFetcher:
         except Exception as e:
             logger.error("获取%s的日K线数据失败: %s", symbol, e)
             return {"error": str(e), "data": []}
-
-    def _apply_qfq(
-        self, client: Quotes, symbol: str, df: pd.DataFrame
-    ) -> pd.DataFrame:
-        """
-        应用前复权处理（基于通达信除权除息数据本地计算，前复权基准=最新交易日）
-
-        前复权乘数：对每个除权除息事件，事件日之前的价格乘以
-            ((前一日收盘 * 10 - 每10股派息 + 每10股配股数 * 配股价)
-             / (10 + 每10股配股数 + 每10股送转股数)) / 前一日收盘
-
-        说明：
-        - 乘数序列固定以「最新交易日的日K」为基准计算，与传入窗口无关，因此分钟线
-          只取历史某一天时，其复权口径与日K接口完全一致
-        - 仅调整 open/high/low/close，不调整 volume（分钟量能用于横向比较，保持原始值）
-
-        Args:
-            client: Quotes实例
-            symbol: 股票代码
-            df: 原始K线数据（含 datetime 列）
-
-        Returns:
-            前复权后的DataFrame
-        """
-        try:
-            events = self._get_adjust_events(symbol)
-            if not events or df is None or df.empty:
-                return df
-
-            out = df.copy()
-            day_strs = [str(v)[:10] for v in out["datetime"]]
-
-            # 从最新一根往前扫，累积「事件日晚于当前行」的乘数
-            factors = [1.0] * len(day_strs)
-            ei = len(events) - 1
-            running = 1.0
-            for idx in sorted(range(len(day_strs)), key=lambda i: day_strs[i], reverse=True):
-                current_day = day_strs[idx]
-                while ei >= 0 and events[ei][0] > current_day:
-                    running *= events[ei][1]
-                    ei -= 1
-                factors[idx] = running
-
-            if all(abs(f - 1.0) < 1e-9 for f in factors):
-                return df
-
-            for field in ("open", "high", "low", "close"):
-                out[field] = [round(float(v) * f, 2) for v, f in zip(out[field], factors)]
-            logger.info("%s已完成前复权处理（%d 个除权事件）", symbol, len(events))
-            return out
-
-        except Exception as e:
-            logger.warning(f"{symbol}前复权处理失败，返回原始数据: {e}")
-            return df
-
-    def _get_adjust_events(self, symbol: str) -> List[Tuple[str, float]]:
-        """获取除权除息事件的前复权乘数列表（按事件日升序），按股票短时缓存。"""
-        cached = self._adjust_events_cache.get(symbol)
-        if cached and time.monotonic() - cached[0] < CACHE_TTL_SECONDS:
-            return cached[1]
-
-        events: List[Tuple[str, float]] = []
-        try:
-            events = self._build_adjust_events(symbol)
-        except Exception as e:
-            logger.warning("%s 除权数据计算失败，按不复权处理: %s", symbol, e)
-            events = []
-
-        self._adjust_events_cache[symbol] = (time.monotonic(), events)
-        return events
-
-    def _build_adjust_events(self, symbol: str) -> List[Tuple[str, float]]:
-        """由通达信 xdxr + 原始日K 计算每个除权事件的乘数（事件日, ratio）。"""
-        client = self._get_client()
-        xdxr = client.xdxr(symbol=symbol)
-        if xdxr is None or len(xdxr) == 0:
-            return []
-
-        ex = xdxr[xdxr["category"] == 1].copy()
-        if len(ex) == 0:
-            return []
-
-        # 事件日的「前一日收盘」需要原始日K；取 250 根（约一年）覆盖所有可能影响的事件
-        raw = self._get_raw_daily(symbol)
-        if raw is None or len(raw) == 0:
-            return []
-        closes: Dict[str, float] = {}
-        for dt, cl in zip(raw["datetime"], raw["close"]):
-            try:
-                closes[str(dt)[:10]] = float(cl)
-            except (TypeError, ValueError):
-                continue
-        if not closes:
-            return []
-        trade_days = sorted(closes)
-
-        events: List[Tuple[str, float]] = []
-        for _, row in ex.iterrows():
-            try:
-                ex_day = f"{int(row['year']):04d}-{int(row['month']):02d}-{int(row['day']):02d}"
-            except (TypeError, ValueError, KeyError):
-                continue
-            # 前一日收盘：日K中严格早于事件日的最后一根
-            prev_pos = bisect.bisect_left(trade_days, ex_day) - 1
-            if prev_pos < 0:
-                continue
-            prev_close = closes[trade_days[prev_pos]]
-            if prev_close <= 0:
-                continue
-
-            def _num(key: str) -> float:
-                value = row.get(key)
-                try:
-                    value = float(value)
-                except (TypeError, ValueError):
-                    return 0.0
-                return 0.0 if pd.isna(value) else value
-
-            fenhong = _num("fenhong")        # 每10股派息（元）
-            peigu = _num("peigu")            # 每10股配股（股）
-            peigujia = _num("peigujia")      # 配股价（元）
-            songzhuangu = _num("songzhuangu")  # 每10股送转（股）
-            denominator = 10 + peigu + songzhuangu
-            if denominator <= 0:
-                continue
-            ex_rights_price = (prev_close * 10 - fenhong + peigu * peigujia) / denominator
-            ratio = ex_rights_price / prev_close
-            if ratio <= 0 or abs(ratio - 1.0) < 1e-9:
-                continue
-            events.append((ex_day, ratio))
-
-        events.sort(key=lambda item: item[0])
-        if events:
-            logger.info("%s 除权事件 %d 个: %s", symbol, len(events), events[-3:])
-        return events
 
     def extract_adaptive_kline(self, data_list: List[Dict], threshold_pct: float = 1.0, pre_close: float = 0.0, stock_name: str = "", symbol: str = "") -> List[Dict]:
         """
@@ -1262,7 +1256,7 @@ class StockDataFetcher:
 
             row = df.iloc[0]
 
-            # mootdx返回的列名: price(当前价), last_close(昨收), open, high, low, vol, amount
+            # 适配层返回的列名: price(当前价), last_close(昨收), open, high, low, vol, amount
             last_close = round(float(row.get("last_close", 0)), 2)
             price = round(float(row.get("price", 0)), 2)
             return {

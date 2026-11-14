@@ -1,35 +1,36 @@
 ---
 name: mcp-servers
 description: >-
-  stock-market-service、kph-market-data、star-stocks 三个 MCP 服务的使用指导，共 21 个工具。
+  stock-market-service、kph-market-data、star-stocks 三个 MCP 服务的使用指导，共 22 个工具。
   需要调用这三个 MCP 任意工具时使用；若上下文中已包含此 skill 内容，则无需重复读取。
 ---
 
 # MCP Servers 综合使用指南
 
-包含 3 个 MCP 服务，共 **21 个工具**。每个 tool 返回文本或 JSON 字符串；成功为数据，失败含 `"error"` 信息。
+包含 3 个 MCP 服务，共 **22 个工具**。每个 tool 返回文本或 JSON 字符串；成功为数据，失败含 `"error"` 信息。
 
 ---
 
 ## 一、stock-market-service（A股行情数据服务）
 
-基于 mootdx（通达信数据接口），提供 A 股行情数据查询。数据均做前复权处理。
+基于 eltdx（通达信数据接口），提供 A 股行情数据查询。日K与分钟K均由服务器返回前复权数据（`adjust='qfq'`），本地不做复权计算。
 
-### 工具清单（3 个）
+### 工具清单（4 个）
 
 #### get_minute_kline
-获取 1 分钟 K 线数据，适用于观察单日分时走势与量能。
+获取 1 分钟 K 线数据（单日，前复权），适用于观察单日K线形状与量能。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
 | stock_code | str | 与 name 二选一 | "" | 股票代码，如 "600519" |
 | stock_name | str | 与 code 二选一 | "" | 股票名称，如 "贵州茅台" |
-| count | int | 否 | 240 | 数据条数（约 1 个交易日） |
+| date | str | 否 | "" | 目标交易日 YYYY-MM-DD，留空=最近交易日；可回溯约 3 个交易日/页，按交易日自动翻页 |
+| adaptive_threshold | float | 否 | 1.0 | 自适应抽点阈值（%）；0=保留全部 240 个点 |
 
-- **返回字段**：datetime、open、high、low、close、volume、amount
+- **返回字段**：`date`、`prev_close`、`count`、data 项：time、open、high、low、close、volume(手)、change_pct、type
 
 #### get_daily_kline
-获取日 K 线数据，含均线、涨跌停价格。
+获取日 K 线数据，含均线、涨跌停价格、服务器昨收。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
@@ -37,7 +38,7 @@ description: >-
 | stock_name | str | 与 code 二选一 | "" | 股票名称 |
 | count | int | 否 | 120 | K 线条数 |
 
-- **返回字段**：datetime、open、high、low、close、volume、amount、ma5、ma10、ma20、pre_close、limit_up、limit_down、is_limit_up、is_limit_down
+- **返回字段**：datetime、open、high、low、close、volume(手)、shares(股)、amount、ma5、ma10、ma20、pre_close（服务器昨收）、limit_up、limit_down、is_limit_up、is_limit_down
 - **涨跌停比例自动识别**：主板 ±10%、科创板(688)/创业板(300/301) ±20%、北交所(8开头) ±30%、ST ±5%
 
 #### get_stock_quote
@@ -47,6 +48,18 @@ description: >-
 |------|------|------|------|
 | stock_code | str | 与 name 二选一 | "" |
 | stock_name | str | 与 code 二选一 | "" |
+
+#### get_intraday_chart
+获取分时走势（价格曲线 + 均价线 + 每分钟成交量），当日/历史均可。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| stock_code | str | 与 name 二选一 | "" | 股票代码 |
+| stock_name | str | 与 code 二选一 | "" | 股票名称 |
+| date | str | 否 | "" | 目标交易日 YYYY-MM-DD，留空=最近交易日 |
+
+- **返回字段**：`date`、`prev_close`、`count`、data 项：time、price、avg_price（服务器均价线，历史分时为 null）、volume(手)、change_pct
+- 与 `get_minute_kline` 的区别：分时给的是每分钟价格+均价线（画分时图用），分钟K给的是 OHLC（画K线用）；均价线不再需要本地累计成交额自算
 
 ---
 
@@ -233,6 +246,14 @@ description: >-
 1. get_stock_quote(stock_code="600519") → 获取实时行情
 2. get_daily_kline(stock_code="600519") → 了解K线形态与均线
 3. list_main_rotation_trees → 查看当前主线题材中是否包含该股
+```
+
+### 核查某股某日分时走势
+
+```
+1. get_intraday_chart(stock_code="000592", date="2026-11-13") → 价格+均价线+每分钟量
+2. get_minute_kline(stock_code="000592", date="2026-11-13", adaptive_threshold=0) → 同日分钟K
+3. get_daily_kline(stock_code="000592", count=5) → 核对 pre_close 与日K口径一致
 ```
 
 ### 复盘当日盘面

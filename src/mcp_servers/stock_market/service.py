@@ -2,9 +2,9 @@
 A股行情数据MCP服务
 
 提供A股市场数据获取功能，包括：
-- 1分钟K线数据（单日K线形状、量能）
-- 日K数据（含5/10/20日均线、涨跌停、流通市值）
-- 前复权处理
+- 1分钟K线数据（单日K线形状、量能，服务器端前复权）
+- 日K数据（含5/10/20日均线、涨跌停、昨收、成交量股/手）
+- 分时走势（价格 + 服务器均价线 + 每分钟成交量）
 - 服务器自动探测和故障转移
 """
 
@@ -24,7 +24,7 @@ class StockMarketService(BaseMCPServer):
     """
     A股行情数据MCP服务
 
-    提供A股市场数据获取功能，基于mootdx实现。
+    提供A股市场数据获取功能，基于eltdx（通达信数据接口）实现。
     支持服务器自动探测和故障转移。
     """
 
@@ -128,6 +128,7 @@ class StockMarketService(BaseMCPServer):
         def get_daily_kline(stock_code: str = "", stock_name: str = "", count: int = 120) -> str:
             """
             获取股票日K线（前复权，含 ma5/ma10/ma20、涨跌停价与是否涨跌停）。
+            返回字段：datetime/open/high/low/close/volume(手)/shares(股)/amount/ma5/ma10/ma20/pre_close(服务器昨收)/limit_up/limit_down/is_limit_up/is_limit_down。
             count 默认120；stock_code 或 stock_name 二选一，优先 stock_code。
             """
             try:
@@ -154,6 +155,22 @@ class StockMarketService(BaseMCPServer):
                 logger.error(f"获取股票实时行情失败: {e}")
                 return json.dumps({"error": str(e)}, ensure_ascii=False)
 
+        @self._tool(structured_output=False)
+        def get_intraday_chart(stock_code: str = "", stock_name: str = "", date: str = "") -> str:
+            """
+            获取单只股票分时走势（价格曲线 + 均价线 + 每分钟成交量，当日/历史均可）。
+            返回字段：prev_close(昨收)、time、price、avg_price(服务器均价线，历史分时为 null)、volume(手)、change_pct。
+            date 格式 YYYY-MM-DD，留空=最近交易日。
+            """
+            try:
+                symbol = self._data_fetcher.resolve_stock_code(stock_code, stock_name)
+                logger.info(f"获取分时数据: {symbol}, 日期: {date or '最近交易日'}")
+                result = self._data_fetcher.get_intraday_chart(symbol, date)
+                return json.dumps(result, ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"获取分时数据失败: {e}")
+                return json.dumps({"error": str(e), "data": []}, ensure_ascii=False)
+
     def register_resources(self):
         """注册资源方法"""
 
@@ -170,11 +187,11 @@ class StockMarketService(BaseMCPServer):
                     "name": self.name,
                     "version": self.version,
                     "features": [
-                        "1分钟K线数据（单日K线形状、量能）",
-                        "日K数据（含5/10/20日均线、涨跌停）",
-                        "前复权处理",
+                        "1分钟K线数据（单日K线形状、量能，服务器端前复权）",
+                        "日K数据（含5/10/20日均线、涨跌停、服务器昨收）",
+                        "分时走势（价格 + 服务器均价线 + 每分钟成交量）",
                     ],
-                    "data_source": "mootdx（通达信数据接口）",
+                    "data_source": "eltdx（通达信数据接口）",
                 },
                 ensure_ascii=False,
                 indent=2,
