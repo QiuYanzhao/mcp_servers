@@ -428,4 +428,4 @@ MCP 服务定义类：`register_tools()`（5 个工具）、`register_resources(
 | 2026-10 | 分钟线支持按交易日取数 + 自适应窗口定位；引入 `TradingCalendar`；涨跌停四舍五入到分 |
 | 2026-10-25 | `5fcfba4` 客户端从 mootdx 迁移到 eltdx |
 | 2026-11-14 | `2ec9a3d`：日K/分钟K 改服务器前复权，删除本地复权；昨收取 `last_close`；日K 增 `shares`；新增 `get_intraday_chart`（价格+均价线+每分钟量）；修复适配层漏传 `start`；工具数 4→5 |
-</file>
+
